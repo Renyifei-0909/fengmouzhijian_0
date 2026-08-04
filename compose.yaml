@@ -1,0 +1,36 @@
+services:
+  backend:
+    build: ./backend
+    environment:
+      FENGMOU_ENVIRONMENT: demo
+      FENGMOU_DATABASE_URL: sqlite:////app/data/fengmou.db
+      FENGMOU_DATABASE_SCHEMA_MODE: upgrade
+      FENGMOU_STORAGE_ROOT: /app/data/storage
+      FENGMOU_MAX_UPLOAD_BYTES: "524288000"
+      FENGMOU_ALLOW_DEMO_ANALYZER: "true"
+      FENGMOU_REMOTE_ANALYZER_ENABLED: "false"
+      FENGMOU_OPERATOR_API_KEY: local-demo-operator-key-change-me
+      FENGMOU_REVIEWER_API_KEY: local-demo-reviewer-key-change-me
+      FENGMOU_AUDITOR_API_KEY: local-demo-auditor-key-change-me
+      FENGMOU_CORS_ORIGINS: http://localhost:5173
+    volumes:
+      - ./runtime-data:/app/data
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/readyz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_OPERATOR_API_KEY: local-demo-operator-key-change-me
+        VITE_REVIEWER_API_KEY: local-demo-reviewer-key-change-me
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "5173:80"

@@ -1,0 +1,294 @@
+{
+  "$defs": {
+    "AnalyzerFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "error",
+            "critical"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "title": "AnalyzerFinding",
+      "type": "object"
+    },
+    "AnalyzerObservations": {
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "maxItems": 1000,
+          "title": "Events",
+          "type": "array"
+        },
+        "measurements": {
+          "additionalProperties": true,
+          "maxProperties": 100,
+          "title": "Measurements",
+          "type": "object"
+        },
+        "objects": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "maxItems": 1000,
+          "title": "Objects",
+          "type": "array"
+        }
+      },
+      "title": "AnalyzerObservations",
+      "type": "object"
+    },
+    "RemoteAlignment": {
+      "additionalProperties": false,
+      "properties": {
+        "differences": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "maxItems": 1000,
+          "title": "Differences",
+          "type": "array"
+        },
+        "status": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "RemoteAlignment",
+      "type": "object"
+    },
+    "RemoteModelIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Artifact Sha256",
+          "type": "string"
+        },
+        "code_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Code Sha256"
+        },
+        "config_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Config Sha256"
+        },
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "artifact_sha256"
+      ],
+      "title": "RemoteModelIdentity",
+      "type": "object"
+    },
+    "RemoteRuntimeIdentity": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "model"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "capabilities": {
+                "minItems": 1
+              },
+              "model_loaded": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "stub"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "capabilities": {
+                "maxItems": 0
+              },
+              "model_loaded": {
+                "const": false
+              }
+            }
+          }
+        }
+      ],
+      "description": "Machine-enforced distinction between a real model and a contract stub.",
+      "properties": {
+        "capabilities": {
+          "items": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9_.-]*$",
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Capabilities",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "mode": {
+          "enum": [
+            "model",
+            "stub"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "model_loaded": {
+          "title": "Model Loaded",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "mode",
+        "model_loaded",
+        "capabilities"
+      ],
+      "title": "RemoteRuntimeIdentity",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Fields an algorithm service is allowed to return.\n\nProtected business fields such as evidence_grade and accuracy_claim are not\npart of this model. Extra fields are rejected instead of being trusted.",
+  "properties": {
+    "alignment": {
+      "$ref": "#/$defs/RemoteAlignment"
+    },
+    "confidence": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confidence"
+    },
+    "contract_version": {
+      "const": "1.0",
+      "title": "Contract Version",
+      "type": "string"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/AnalyzerFinding"
+      },
+      "maxItems": 1000,
+      "title": "Findings",
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 100,
+      "title": "Limitations",
+      "type": "array"
+    },
+    "model": {
+      "$ref": "#/$defs/RemoteModelIdentity"
+    },
+    "observations": {
+      "$ref": "#/$defs/AnalyzerObservations"
+    },
+    "request_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Request Id",
+      "type": "string"
+    },
+    "runtime": {
+      "$ref": "#/$defs/RemoteRuntimeIdentity"
+    }
+  },
+  "required": [
+    "contract_version",
+    "request_id",
+    "model",
+    "runtime",
+    "observations",
+    "alignment",
+    "findings"
+  ],
+  "title": "RemoteAnalyzerResponse",
+  "type": "object"
+}

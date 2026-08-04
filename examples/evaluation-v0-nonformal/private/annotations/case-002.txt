@@ -1,0 +1,1 @@
+case-002|contract-example-labels-v0|adjudicated-fixture|helmet_missing

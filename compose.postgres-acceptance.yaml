@@ -1,0 +1,28 @@
+name: fengmou-postgres-acceptance
+
+services:
+  postgres:
+    image: postgres:17.10-bookworm@sha256:4f736ae292687621d4dbe0d499ffd024a36bd2ee7d8ca6f2ccd4c800f047b394
+    restart: "no"
+    shm_size: 128mb
+    environment:
+      POSTGRES_USER: fengmou_admin
+      POSTGRES_PASSWORD: local-postgres-admin-acceptance-only
+      POSTGRES_DB: fengmou_acceptance
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --data-checksums
+    ports:
+      - "127.0.0.1:55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data:rw,noexec,nosuid,size=1073741824
+    volumes:
+      - ./backend/tests/postgres/init.sql:/docker-entrypoint-initdb.d/001-fengmou-role.sql:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U fengmou_admin -d fengmou_acceptance -h 127.0.0.1",
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 10s

@@ -1,24 +1,15 @@
-# Dependencies
-node_modules/
-
-# Build
-dist/
-dist-ssr/
-
-# Local / env
-*.local
-.env
-.env.*
-
-# Logs & cache
-*.log
-npm-debug.log*
 .DS_Store
-Thumbs.db
-
-# Editor / OS junk
-.vscode/*
-!.vscode/extensions.json
-.idea/
-._*
-*~
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+node_modules/
+frontend/dist/
+runtime-data/
+backend/data/
+backend/build/

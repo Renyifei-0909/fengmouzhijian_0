@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0",
+  "package_code": "PKG-ALPHA18-COMMERCIAL",
+  "purpose": "demo",
+  "synthetic": true,
+  "source_crs_epsg": 25832,
+  "design_version": "design-v1",
+  "redaction_policy": {
+    "note": "Sample design package for commercial UI trial; not field evidence.",
+    "attribute_whitelist": [
+      "object_code",
+      "name",
+      "expected_pipe_count",
+      "expected_trench_stage",
+      "expected_specification",
+      "procedure_code",
+      "design_version"
+    ],
+    "deny_list": ["phone", "email", "address", "attachment_path"]
+  },
+  "field_mapping": {
+    "pipe_routes.expected_pipe_count": "visible_pipe_count",
+    "pipe_routes.expected_trench_stage": "trench_stage"
+  },
+  "layers": {
+    "pipe_routes": {
+      "features": [
+        {
+          "object_code": "PIPE-101",
+          "name": "样例管段 PIPE-101",
+          "source_feature_id": "comm-1",
+          "geometry": {
+            "type": "LineString",
+            "coordinates": [
+              [400000.0, 5700000.0],
+              [400050.0, 5700010.0],
+              [400100.0, 5700020.0]
+            ]
+          },
+          "attributes": {
+            "object_code": "PIPE-101",
+            "name": "样例管段 PIPE-101",
+            "expected_pipe_count": 4,
+            "expected_trench_stage": "laying",
+            "expected_specification": "PE110",
+            "procedure_code": "TRENCH-BEFORE-BACKFILL",
+            "design_version": "design-v1"
+          }
+        }
+      ]
+    },
+    "contacts_sensitive_should_skip": {
+      "features": [
+        {
+          "object_code": "SKIP-ME",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [400010.0, 5700005.0]
+          },
+          "attributes": {
+            "phone": "should-be-dropped",
+            "email": "should-be-dropped@example.com"
+          }
+        }
+      ]
+    }
+  }
+}

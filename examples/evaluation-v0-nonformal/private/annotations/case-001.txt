@@ -1,0 +1,1 @@
+case-001|contract-example-labels-v0|adjudicated-fixture|helmet_compliant

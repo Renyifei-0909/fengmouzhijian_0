@@ -1,0 +1,2 @@
+{"schema_version":"evaluation.prediction.v0","case_id":"case-001","output":{"kind":"violation_single_label","label":"helmet_compliant"}}
+{"schema_version":"evaluation.prediction.v0","case_id":"case-002","output":{"kind":"violation_single_label","label":"helmet_compliant"}}

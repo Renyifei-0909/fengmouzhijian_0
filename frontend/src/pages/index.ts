@@ -1,0 +1,16 @@
+export { DashboardPage } from "./DashboardPage";
+export { ProjectsPage } from "./ProjectsPage";
+export { ProjectDetailPage } from "./ProjectDetailPage";
+export { AlarmsPage } from "./AlarmsPage";
+export { DevicesPage } from "./DevicesPage";
+export { AnalyticsPage } from "./AnalyticsPage";
+export { ReportsPage } from "./ReportsPage";
+export { HiddenAIPage } from "./HiddenAIPage";
+export { GISMapPage } from "./GISMapPage";
+export { WorkOrderPage } from "./WorkOrderPage";
+export { DataCockpitPage } from "./DataCockpitPage";
+export { TraceabilityPage } from "./TraceabilityPage";
+export { ModelServicePage } from "./ModelServicePage";
+export { AccountSettingsPage } from "./AccountSettingsPage";
+export { SystemSettingsPage } from "./SystemSettingsPage";
+export { BackendWorkflowPage } from "./BackendWorkflowPage";

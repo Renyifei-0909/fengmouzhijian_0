@@ -1,0 +1,9 @@
+include README.md
+include build-constraints.txt
+include uv-bootstrap.txt
+include uv.lock
+include scripts/verify_dependency_lock.py
+include scripts/postgres_acceptance.py
+include scripts/postgres_contention_observe.py
+prune tests
+global-exclude __pycache__ *.py[cod]

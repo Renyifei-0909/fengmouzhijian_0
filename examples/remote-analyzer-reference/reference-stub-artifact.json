@@ -1,0 +1,8 @@
+{
+  "artifact_type": "reference_stub_declaration",
+  "name": "fengmou-reference-stub",
+  "version": "stub-v0.1",
+  "capabilities": [],
+  "predictor_behavior": "returns empty observations and an explicit not-evaluated limitation",
+  "truth_boundary": "This artifact is an executable protocol fixture, not trained model weights and not evidence of algorithm performance."
+}

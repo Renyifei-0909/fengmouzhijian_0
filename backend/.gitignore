@@ -1,0 +1,5 @@
+﻿# Test / build artifacts (do not commit as formal baseline)
+test-artifacts/
+pytest_full*.txt
+tmp_*.gpkg
+tmp_failed_nodes*.txt

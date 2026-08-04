@@ -1,0 +1,367 @@
+{
+  "$defs": {
+    "RemoteBaselineExpected": {
+      "additionalProperties": false,
+      "description": "Explicit data-egress allowlist for the current remote contract.",
+      "properties": {
+        "measurements": {
+          "$ref": "#/$defs/RemoteBaselineMeasurements"
+        },
+        "scene_type": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scene Type"
+        }
+      },
+      "title": "RemoteBaselineExpected",
+      "type": "object"
+    },
+    "RemoteBaselineMeasurements": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_quantity": {
+          "anyOf": [
+            {
+              "maximum": 10000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Quantity"
+        },
+        "expected_specification": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Specification"
+        },
+        "min_depth_m": {
+          "anyOf": [
+            {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Depth M"
+        },
+        "min_spacing_m": {
+          "anyOf": [
+            {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Spacing M"
+        }
+      },
+      "title": "RemoteBaselineMeasurements",
+      "type": "object"
+    },
+    "RemoteBaselineRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "expected": {
+          "$ref": "#/$defs/RemoteBaselineExpected"
+        },
+        "id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "procedure_code": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Procedure Code",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "site_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Site Id",
+          "type": "string"
+        },
+        "source_type": {
+          "maxLength": 32,
+          "minLength": 1,
+          "title": "Source Type",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "site_id",
+        "procedure_code",
+        "version",
+        "source_type",
+        "expected",
+        "sha256"
+      ],
+      "title": "RemoteBaselineRequest",
+      "type": "object"
+    },
+    "RemoteEvidenceRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "content_type": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Content Type",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "media_probe": {
+          "$ref": "#/$defs/RemoteMediaProbe"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 1,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "sha256",
+        "size_bytes",
+        "content_type"
+      ],
+      "title": "RemoteEvidenceRequest",
+      "type": "object"
+    },
+    "RemoteMediaProbe": {
+      "additionalProperties": false,
+      "properties": {
+        "duration_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Seconds"
+        },
+        "format_name": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format Name"
+        },
+        "frame_rate": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Frame Rate"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "maximum": 100000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Height"
+        },
+        "video_codec": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Video Codec"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "maximum": 100000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        }
+      },
+      "title": "RemoteMediaProbe",
+      "type": "object"
+    },
+    "RemoteOutputPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "accuracy_claims_forbidden": {
+          "const": true,
+          "title": "Accuracy Claims Forbidden",
+          "type": "boolean"
+        },
+        "evidence_grade_controlled_by_business_service": {
+          "const": true,
+          "title": "Evidence Grade Controlled By Business Service",
+          "type": "boolean"
+        },
+        "human_review_required": {
+          "const": true,
+          "title": "Human Review Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "human_review_required",
+        "evidence_grade_controlled_by_business_service",
+        "accuracy_claims_forbidden"
+      ],
+      "title": "RemoteOutputPolicy",
+      "type": "object"
+    },
+    "RemoteRequestedModel": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Artifact Sha256",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "artifact_sha256"
+      ],
+      "title": "RemoteRequestedModel",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "baseline": {
+      "$ref": "#/$defs/RemoteBaselineRequest"
+    },
+    "contract_version": {
+      "const": "1.0",
+      "title": "Contract Version",
+      "type": "string"
+    },
+    "evidence": {
+      "$ref": "#/$defs/RemoteEvidenceRequest"
+    },
+    "job_id": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Job Id",
+      "type": "string"
+    },
+    "model": {
+      "$ref": "#/$defs/RemoteRequestedModel"
+    },
+    "output_policy": {
+      "$ref": "#/$defs/RemoteOutputPolicy"
+    },
+    "task_type": {
+      "const": "construction_evidence_analysis",
+      "title": "Task Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "contract_version",
+    "job_id",
+    "task_type",
+    "model",
+    "evidence",
+    "baseline",
+    "output_policy"
+  ],
+  "title": "RemoteAnalyzerRequest",
+  "type": "object"
+}
