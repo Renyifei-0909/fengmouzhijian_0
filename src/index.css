@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #e6f4ff;
+  --color-brand-100: #bae0ff;
+  --color-brand-200: #91caff;
+  --color-brand-300: #69b1ff;
+  --color-brand-400: #4096ff;
+  --color-brand-500: #1677ff;
+  --color-brand-600: #0958d9;
+  --color-brand-700: #0842a0;
+  --color-brand-800: #062e6f;
+  --color-brand-900: #031d54;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply text-slate-900 antialiased;
+  background:
+    radial-gradient(circle at top, rgba(125, 211, 252, 0.28), transparent 26%),
+    radial-gradient(circle at right top, rgba(59, 130, 246, 0.16), transparent 24%),
+    linear-gradient(180deg, #f5fbff 0%, #f8fbff 22%, #f8fafc 100%);
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  transition: all 180ms ease;
+}
+
+::selection {
+  background: rgba(14, 165, 233, 0.18);
+}
+
+.page-enter {
+  animation: pageFade 240ms ease-out both;
+}
+
+@keyframes pageFade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
