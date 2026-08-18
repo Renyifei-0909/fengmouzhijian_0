@@ -14,3 +14,7 @@ export { ModelServicePage } from "./ModelServicePage";
 export { AccountSettingsPage } from "./AccountSettingsPage";
 export { SystemSettingsPage } from "./SystemSettingsPage";
 export { BackendWorkflowPage } from "./BackendWorkflowPage";
+export { WorkerWorkOrdersPage } from "./WorkerWorkOrdersPage";
+export { WorkerWorkOrderPage } from "./WorkerWorkOrderPage";
+export { WorkerRemediationPage } from "./WorkerRemediationPage";
+export { WorkerProfilePage } from "./WorkerProfilePage";
