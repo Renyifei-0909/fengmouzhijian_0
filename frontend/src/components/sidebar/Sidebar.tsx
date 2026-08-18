@@ -1,5 +1,5 @@
 import React from "react";
-import { NavLink } from "react-router";
+import { Link, NavLink } from "react-router";
 import { cn } from "../../utils/cn";
 import {
   DashboardIcon,
@@ -80,6 +80,12 @@ export const Sidebar: React.FC = () => {
         </div>
 
         <div className="border-t border-white/10 px-5 py-4">
+          <Link
+            to="/worker/work-orders"
+            className="mb-4 flex min-h-10 items-center justify-center gap-2 rounded-xl border border-sky-300/20 bg-sky-300/10 px-3 text-xs font-semibold text-sky-100 hover:bg-sky-300/20"
+          >
+            <ShieldIcon className="h-4 w-4" /> 进入现场作业端
+          </Link>
           <p className="text-xs font-medium text-white">{COPY.identityRole}</p>
           <p className="mt-1 text-[11px] text-sky-200/70">{COPY.identityOrg}</p>
         </div>
