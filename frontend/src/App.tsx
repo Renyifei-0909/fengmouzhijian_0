@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router";
 import { Sidebar } from "./components/sidebar/Sidebar";
 import { Header } from "./components/header/Header";
+import { WorkerShell } from "./components/worker/WorkerShell";
 import { cn } from "./utils/cn";
 import {
   AlarmIcon,
@@ -28,6 +29,10 @@ import {
   AccountSettingsPage,
   SystemSettingsPage,
   BackendWorkflowPage,
+  WorkerWorkOrdersPage,
+  WorkerWorkOrderPage,
+  WorkerRemediationPage,
+  WorkerProfilePage,
 } from "./pages";
 import { PAGE_META, PRIMARY_NAV } from "./lib/productCopy";
 
@@ -150,9 +155,27 @@ const AppShell: React.FC = () => {
   );
 };
 
+const WorkerApp: React.FC = () => (
+  <WorkerShell>
+    <Routes>
+      <Route path="/worker" element={<Navigate to="/worker/work-orders" replace />} />
+      <Route path="/worker/work-orders" element={<WorkerWorkOrdersPage />} />
+      <Route path="/worker/work-orders/:id" element={<WorkerWorkOrderPage />} />
+      <Route path="/worker/remediation" element={<WorkerRemediationPage />} />
+      <Route path="/worker/profile" element={<WorkerProfilePage />} />
+      <Route path="/worker/*" element={<Navigate to="/worker/work-orders" replace />} />
+    </Routes>
+  </WorkerShell>
+);
+
+const AppRouter: React.FC = () => {
+  const location = useLocation();
+  return location.pathname.startsWith("/worker") ? <WorkerApp /> : <AppShell />;
+};
+
 const App: React.FC = () => (
   <BrowserRouter>
-    <AppShell />
+    <AppRouter />
   </BrowserRouter>
 );
 
