@@ -705,13 +705,18 @@ export const api = {
     file: File;
     analyzer: AnalyzerName;
     remediationAttemptId?: string;
+    deviceId?: string;
+    metadata?: Record<string, unknown>;
   }) => {
     const data = new FormData();
     data.set("project_id", payload.projectId);
     data.set("baseline_id", payload.baselineId);
     data.set("analyzer", payload.analyzer);
-    data.set("device_id", "WEB-UPLOAD-01");
-    data.set("metadata", JSON.stringify({ source: "backend-workflow-page", privacy: "user-provided" }));
+    data.set("device_id", payload.deviceId || "WEB-UPLOAD-01");
+    data.set(
+      "metadata",
+      JSON.stringify(payload.metadata || { source: "backend-workflow-page", privacy: "user-provided" }),
+    );
     if (payload.remediationAttemptId?.trim()) {
       data.set("remediation_attempt_id", payload.remediationAttemptId.trim());
     }
