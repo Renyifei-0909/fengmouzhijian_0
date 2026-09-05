@@ -230,6 +230,11 @@ export const GISMapPage: React.FC = () => {
         assigned_to: assignedTo.trim() || undefined,
         notes: "工程作业台创建",
       });
+      // Backend creates work orders in `draft`; evidence upload requires `assigned`.
+      // Assign right away so the capture panel can accept field evidence (fix: draft never uploaded).
+      if (assignedTo.trim()) {
+        await api.assignWorkOrder(wo.id, assignedTo.trim());
+      }
       setNotice(`已创建施工工单 ${wo.work_order_code}`);
       setWoCode("");
       await loadProjectData(projectId);

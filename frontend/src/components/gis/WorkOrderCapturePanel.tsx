@@ -70,6 +70,8 @@ export const WorkOrderCapturePanel: React.FC<Props> = ({
   const [compliance, setCompliance] = useState<ComplianceEvaluation | null>(null);
   const [historyMeta, setHistoryMeta] = useState<Record<string, HistoryMeta>>({});
   const [selectionLoading, setSelectionLoading] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
@@ -244,6 +246,27 @@ export const WorkOrderCapturePanel: React.FC<Props> = ({
     },
     [workOrder.id, loadCaptureDetails],
   );
+
+  // Reviewer approves the selected capture's verification; the finding case can
+  // then enter the remediation loop (start-remediation requires an approved source).
+  const approveCapture = async () => {
+    const job = detail?.job;
+    if (!job) return;
+    setReviewing(true);
+    setReviewError(null);
+    try {
+      await api.review(job.id, {
+        decision: "approve",
+        reviewer: "现场复核员",
+        note: "批准该工单采集证据，允许案件进入整改与交付流转",
+      });
+      await refreshCaptures(selectedCaptureIdRef.current);
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : "复核失败");
+    } finally {
+      setReviewing(false);
+    }
+  };
 
   useEffect(() => {
     void refreshCaptures();
@@ -1033,6 +1056,23 @@ export const WorkOrderCapturePanel: React.FC<Props> = ({
         <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         人工复核、整改与报告归档请前往核验中心与整改中心处理。
       </div>
+
+      {detail && detail.job.status === "needs_review" ? (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2">
+          <p className="text-[11px] leading-4 text-slate-600">
+            该采集任务等待人工复核；批准后案件才能进入整改闭环。请复核员确认现场资料与规则初判。
+          </p>
+          <button
+            type="button"
+            disabled={reviewing}
+            onClick={() => void approveCapture()}
+            className="mt-1.5 w-full rounded-xl bg-sky-600 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+          >
+            {reviewing ? "提交复核中…" : "批准本次采集（复核员）"}
+          </button>
+          {reviewError ? <p className="mt-1 text-[10px] text-rose-600">{reviewError}</p> : null}
+        </div>
+      ) : null}
     </div>
   );
 };

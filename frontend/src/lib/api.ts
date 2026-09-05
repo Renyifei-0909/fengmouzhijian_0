@@ -859,6 +859,13 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }),
+  // Backend keeps a new work order in `draft`; evidence upload requires `assigned`.
+  assignWorkOrder: (workOrderId: string, assignee: string) =>
+    request<WorkOrder>(`/work-orders/${encodeURIComponent(workOrderId)}/assign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assigned_to: assignee }),
+    }),
   uploadWorkOrderVerification: (payload: {
     workOrderId: string;
     file: File;
