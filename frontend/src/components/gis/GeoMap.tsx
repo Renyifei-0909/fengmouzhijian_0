@@ -27,6 +27,26 @@ const POINT_LAYER = "engineering-point";
 const SELECTED_LINE = "engineering-selected-line";
 const SELECTED_POINT = "engineering-selected-point";
 
+type QgisLayerConfig = {
+  id: string;
+  file: string;
+  label: string;
+  type: "line" | "circle";
+  color: string;
+  width?: number;
+  radius?: number;
+};
+
+const QGIS_PROJECT_LAYERS: QgisLayerConfig[] = [
+  { id: "qgis-pipes", file: "pipes.geojson", label: "管线", type: "line", color: "#075fb8", width: 4 },
+  { id: "qgis-survey", file: "survey.geojson", label: "测量", type: "line", color: "#f97316", width: 3 },
+  { id: "qgis-house-connections", file: "house-connections.geojson", label: "入户线", type: "line", color: "#dc2626", width: 3 },
+  { id: "qgis-addresses", file: "addresses.geojson", label: "地址", type: "circle", color: "#a855f7", radius: 4 },
+  { id: "qgis-infrastructure", file: "infrastructure.geojson", label: "设施", type: "circle", color: "#16a34a", radius: 6 },
+  { id: "qgis-pit-work", file: "pit-work.geojson", label: "施工点", type: "circle", color: "#f59e0b", radius: 7 },
+  { id: "qgis-photos", file: "photos.geojson", label: "照片点", type: "circle", color: "#db2777", radius: 6 },
+];
+
 type FeatureCollection = {
   type: "FeatureCollection";
   features: Array<{
@@ -75,6 +95,8 @@ type GeoMapProps = {
   className?: string;
   /** Optional online basemap style URL; offline blank style is always the default. */
   onlineStyleUrl?: string | null;
+  /** Show the desensitized Dreieich QGIS project overlay bundled with the demo. */
+  showQgisProject?: boolean;
 };
 
 export const GeoMap: React.FC<GeoMapProps> = ({
@@ -84,6 +106,7 @@ export const GeoMap: React.FC<GeoMapProps> = ({
   captureMarker = null,
   className = "",
   onlineStyleUrl = null,
+  showQgisProject = true,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
@@ -110,6 +133,75 @@ export const GeoMap: React.FC<GeoMapProps> = ({
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
     map.on("load", () => {
+      if (!map.getSource("osm-de")) {
+        map.addSource("osm-de", {
+          type: "raster",
+          tiles: ["https://tile.openstreetmap.de/{z}/{x}/{y}.png"],
+          tileSize: 256,
+          attribution: "© OpenStreetMap contributors",
+        });
+        map.addLayer({ id: "osm-de", type: "raster", source: "osm-de" });
+      }
+
+      if (showQgisProject) {
+        void Promise.all(
+          QGIS_PROJECT_LAYERS.map(async (config) => {
+            const response = await fetch(`/qgis-dreieich/${config.file}`);
+            if (!response.ok) throw new Error(`QGIS layer load failed: ${config.file}`);
+            const data = (await response.json()) as GeoJSON.FeatureCollection;
+            map.addSource(config.id, { type: "geojson", data });
+            if (config.type === "line") {
+              map.addLayer({
+                id: config.id,
+                type: "line",
+                source: config.id,
+                paint: {
+                  "line-color": config.color,
+                  "line-width": config.width ?? 3,
+                  "line-opacity": 0.92,
+                },
+              });
+            } else {
+              map.addLayer({
+                id: config.id,
+                type: "circle",
+                source: config.id,
+                paint: {
+                  "circle-radius": config.radius ?? 5,
+                  "circle-color": config.color,
+                  "circle-opacity": 0.9,
+                  "circle-stroke-width": 1.5,
+                  "circle-stroke-color": "#ffffff",
+                },
+              });
+            }
+            return data;
+          }),
+        )
+          .then((collections) => {
+            const points = collections.flatMap((collection) =>
+              collection.features.flatMap((feature) =>
+                feature.geometry
+                  ? collectLonLats(feature.geometry as GeoJsonGeometry)
+                  : [],
+              ),
+            );
+            const bounds = boundsFromPoints(points, 0.04);
+            if (bounds) {
+              map.fitBounds(
+                [
+                  [bounds.minLon, bounds.minLat],
+                  [bounds.maxLon, bounds.maxLat],
+                ],
+                { padding: 36, maxZoom: 17, duration: 600 },
+              );
+            }
+          })
+          .catch((error) => {
+            console.warn("Unable to load bundled QGIS project", error);
+          });
+      }
+
       map.addSource(SOURCE_ID, {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -217,7 +309,7 @@ export const GeoMap: React.FC<GeoMapProps> = ({
       map.remove();
       mapRef.current = null;
     };
-  }, [onlineStyleUrl]);
+  }, [onlineStyleUrl, showQgisProject]);
 
   // Sync features + fit bounds.
   useEffect(() => {
@@ -300,8 +392,24 @@ export const GeoMap: React.FC<GeoMapProps> = ({
   return (
     <div className={`relative overflow-hidden ${className}`}>
       <div ref={containerRef} className="h-full w-full min-h-[280px]" />
+      {showQgisProject ? (
+        <div className="pointer-events-none absolute left-3 top-3 max-w-[calc(100%-5rem)] rounded-xl border border-slate-200/90 bg-white/90 px-3 py-2 text-[10px] text-slate-700 shadow-sm backdrop-blur">
+          <p className="mb-1 font-semibold text-slate-900">Dreieich Mitte · QGIS 工程</p>
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {QGIS_PROJECT_LAYERS.map((layer) => (
+              <span key={layer.id} className="inline-flex items-center gap-1">
+                <i
+                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: layer.color }}
+                />
+                {layer.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="pointer-events-none absolute bottom-3 left-3 max-w-[min(100%,22rem)] rounded-xl border border-slate-200/90 bg-white/90 px-2.5 py-1.5 text-[10px] leading-4 text-slate-600 shadow-sm backdrop-blur">
-        位置与几何来源于当前设计数据
+        QGIS 工程已转换为脱敏网页图层 · EPSG:25832 → WGS84
       </div>
     </div>
   );
