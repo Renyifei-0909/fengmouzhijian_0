@@ -635,7 +635,7 @@ export const BackendWorkflowPage: React.FC = () => {
         <div className="absolute -right-20 -top-28 h-72 w-72 rounded-full bg-sky-400/20 blur-3xl" />
 
         {/* 主布局：大屏左文右标签，小屏上下堆叠 */}
-        <div className="relative grid gap-6 xl:grid-cols-[1fr_auto] xl:items-end">
+        <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] xl:items-end">
 
           {/* 左侧描述区域 */}
           <div className="max-w-3xl">
@@ -669,7 +669,7 @@ export const BackendWorkflowPage: React.FC = () => {
             ].map(([label, value]) => (
               <div key={label} className="min-w-0 rounded-2xl bg-slate-950/35 px-2 py-2 sm:px-3 sm:py-3">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-sky-300">{label}</p>
-                <p className="mt-1 truncate text-xs font-semibold text-white sm:text-sm" title={value}>
+                <p className="mt-1 text-xs font-semibold text-white sm:text-sm break-words whitespace-normal" title={value}>
                   {value}
                 </p>
               </div>
@@ -839,7 +839,7 @@ export const BackendWorkflowPage: React.FC = () => {
               )}
 
               <div className="flex flex-col gap-1 border-t border-white/10 pt-3 text-[11px] leading-5 text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-                <span>数据库时点快照；不是 uptime SLA、外部监控或生产就绪声明。</span>
+                <span></span>
                 <span className="font-mono">
                   {new Date(operations.generated_at).toLocaleString("zh-CN", { hour12: false })} · 完整性问题 {operations.integrity.issue_count}
                 </span>
@@ -1117,7 +1117,7 @@ export const BackendWorkflowPage: React.FC = () => {
                         id="verification-attempt-history-title"
                         className="text-sm font-semibold"
                       >
-                        Worker 尝试账本
+                        Worker 尝试
                       </p>
 
                       <p className="mt-1 text-[11px] leading-5 text-slate-300">
