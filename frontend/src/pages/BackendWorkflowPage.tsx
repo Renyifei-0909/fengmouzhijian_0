@@ -869,465 +869,912 @@ export const BackendWorkflowPage: React.FC = () => {
         </div>
       ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_1fr] xl:items-stretch">
-        {/* 01 / 工程语义锚点 */}
-        <section className="xl:col-start-1 xl:col-end-2 xl:row-start-1 xl:row-end-2 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">01 / 工程语义锚点</p>
-              <h3 className="mt-2 text-lg font-semibold text-slate-900">{isRemediationMode ? "锁定原案件项目与设计基线" : "创建匿名项目与设计基线"}</h3>
-              <p className="mt-1 text-sm leading-6 text-slate-500">{isRemediationMode ? "整改复验必须复用原案件的项目和基线，当前页面不允许替换。" : "每个证据必须绑定项目、工点、工序和基线版本。"}</p>
-            </div>
-            <DatabaseIcon className="h-6 w-6 text-sky-600" />
-          </div>
-          {baseline && project ? (
-            <div className="mt-4 space-y-3 rounded-[22px] border border-emerald-200 bg-emerald-50 p-4">
-              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700"><CheckIcon className="h-4 w-4" /> {isRemediationMode ? "原案件项目与基线已锁定" : "基线已持久化"}</div>
-              <p className="text-sm text-slate-700">{project.name} · {baseline.site_id}</p>
-              <p className="break-all font-mono text-[11px] text-slate-500">Project ID: {project.id}</p>
-              <p className="break-all font-mono text-[11px] text-slate-500">Baseline ID: {baseline.id}</p>
-              <p className="break-all font-mono text-[11px] text-slate-500">{baseline.sha256}</p>
-              {remediationCaseDetail && remediationAttempt ? (
-                <div className="rounded-[18px] border border-violet-200 bg-white/80 p-3 text-violet-900">
-                  <p className="text-xs font-semibold">{remediationCaseDetail.case.finding_code} · Attempt #{remediationAttempt.attempt_no}</p>
-                  <p className="mt-2 text-xs leading-5 text-violet-700">{remediationAttempt.action_description}</p>
-                  <p className="mt-2 break-all font-mono text-[11px] text-violet-600">Case ID: {remediationCaseDetail.case.id}</p>
-                  <p className="mt-1 break-all font-mono text-[11px] text-violet-600">Attempt ID: {remediationAttempt.id}</p>
-                  <p className="mt-1 text-[11px] text-violet-600">案件状态：{remediationCaseDetail.case.status} · Attempt 结论：{remediationAttempt.resolution_decision}</p>
-                </div>
-              ) : null}
-            </div>
-          ) : isRemediationMode ? (
-            <div className="mt-5 rounded-[22px] border border-violet-200 bg-violet-50 p-4 text-sm text-violet-800">
-              {remediationContextLoading
-                ? "正在读取并校验原案件、项目、设计基线与 Attempt…"
-                : !operatorToken.trim()
-                  ? "请输入操作员 Key，以读取并锁定原案件项目与设计基线。"
-                  : "原案件上下文尚未通过校验，禁止初始化匿名项目。"}
-            </div>
-          ) : (
-            <button disabled={busy !== null || health !== "ready" || !operatorToken.trim()} onClick={bootstrap} className="mt-5 w-full rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300">
-              {busy === "bootstrap" ? "正在创建..." : "初始化匿名演示工点"}
-            </button>
-          )}
-        </section>
+      <div className="grid gap-5 xl:grid-cols-2 xl:items-start">
 
-        {/* 02 / 原始输入 */}
-        <section className="xl:col-start-2 xl:col-end-3 xl:row-start-1 xl:row-end-2 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">02 / 原始输入</p>
-              <h3 className="mt-2 text-lg font-semibold text-slate-900">选择视频或现场图片</h3>
-            </div>
-            <CameraIcon className="h-6 w-6 text-sky-600" />
-          </div>
-          <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-[24px] border border-dashed border-sky-300 bg-sky-50/70 px-5 py-8 text-center hover:bg-sky-50">
-            <CameraIcon className="h-8 w-8 text-sky-500" />
-            <span className="mt-3 text-sm font-semibold text-slate-800">{file ? file.name : "点击选择本地证据文件"}</span>
-            <span className="mt-1 text-xs text-slate-500">MP4 / MOV / AVI / MKV / WebM / JPG / PNG</span>
-            <input className="sr-only" type="file" accept="video/*,image/jpeg,image/png" onChange={(event) => setFile(event.target.files?.[0] || null)} />
-          </label>
-          {file ? <p className="mt-3 text-xs text-slate-500">{(file.size / 1024 / 1024).toFixed(2)} MB · 哈希由服务端重新计算</p> : null}
+        {/* =========================================================
+      左列：01 → 03
+      大屏：
+        01
+        ↓ gap-5
+        03
+      小屏通过 order 恢复为 01 → 02 → 03 → 04
+      ========================================================= */}
 
-          <div className="mt-5">
-            <label className="text-xs font-semibold text-slate-600" htmlFor="analyzer">处理适配器</label>
-            <select id="analyzer" value={analyzer} onChange={(event) => setAnalyzer(event.target.value as AnalyzerName)} className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-sky-400">
-              <option value="stub">安全占位器：不输出物理测量</option>
-              <option value="demo_fixture" disabled={!meta?.adapters.demo_fixture?.enabled}>演示夹具：仅测试流程，非真实推理</option>
-              <option value="remote_http" disabled={!meta?.adapters.remote_http?.enabled}>远程单样本推理（未评测）</option>
-            </select>
-            <p className="mt-2 text-xs leading-5 text-amber-700">
-              {analyzer === "stub"
-                ? "当前不会生成虚假准确率或测量值。"
-                : analyzer === "demo_fixture"
-                  ? "演示夹具会在报告和证据包中标记 evidence_grade=false。"
-                  : "媒体只发送到部署时固定的算法端点；单样本结果仍为 evidence_grade=false、accuracy_claim=null。"}
-            </p>
-          </div>
-          <label className="mt-4 block text-xs font-semibold text-slate-600" htmlFor="remediation-attempt-id">
-            {isRemediationMode ? "整改复验 Attempt ID（已由案件页锁定）" : "整改复验 Attempt ID"}
-            <input
-              id="remediation-attempt-id"
-              value={remediationAttemptId}
-              readOnly
-              placeholder="普通任务留空；整改复验请从案件页进入"
-              className="mt-2 w-full cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-mono text-xs text-slate-800 outline-none"
-            />
-          </label>
-          <p className="mt-2 text-xs leading-5 text-violet-700">{isRemediationMode ? "上传前已校验 Attempt 归属，并锁定原案件项目与设计基线。" : "普通任务保持为空；整改复验必须从告警与整改页的具体 Attempt 进入。"}</p>
-          <button disabled={!baseline || !file || busy !== null || !operatorToken.trim() || remediationContextLoading || (isRemediationMode && (!remediationCaseDetail || !remediationAttempt || Boolean(remediationAttempt.verification_job_id)))} onClick={submit} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300">
-            <AnalyticsIcon className="h-4 w-4" /> {busy === "upload" ? "上传并创建任务..." : "提交真实后端任务"}
-          </button>
-        </section>
+        <div className="contents xl:flex xl:flex-col xl:gap-5">
 
-        {/* 03 / 任务与结果 */}
-        <section className="xl:col-start-1 xl:col-end-2 xl:row-start-2 xl:row-end-3 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">03 / 任务与结果</p>
-              <h3 className="mt-2 text-lg font-semibold text-slate-900">持久化处理状态</h3>
-            </div>
-            {detail ? (
-              <span
-                className={cn(
-                  "rounded-full px-3 py-1 text-xs font-semibold",
-                  detail.job.status === "failed"
-                    ? "bg-danger-light text-danger"
-                    : detail.job.status === "approved"
-                      ? "bg-success-light text-success"
-                      : detail.job.status === "needs_review"
-                        ? "bg-warning-light text-warning"
-                        : "bg-slate-100 text-slate-700"
-                )}
-              >
-                {statusLabel[detail.job.status] || detail.job.status}
-              </span>
-            ) : null}
-          </div>
-
-          {!detail ? (
-            <div className="mt-5 flex min-h-52 flex-col items-center justify-center rounded-[24px] border border-slate-200 bg-slate-50 text-center">
-              <AnalyticsIcon className="h-8 w-8 text-slate-300" />
-              <p className="mt-3 text-sm font-medium text-slate-500">提交文件后显示真实任务状态与输出</p>
-            </div>
-          ) : (
-            <div className="mt-5 space-y-4">
-              {/* 任务进度条 */}
-              <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span>任务进度</span>
-                  <span>{detail.job.progress}%</span>
-                </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all",
-                      detail.job.status === "failed"
-                        ? "bg-danger"
-                        : detail.job.status === "approved"
-                          ? "bg-success"
-                          : detail.job.status === "needs_review"
-                            ? "bg-warning"
-                            : "bg-sky-500"
-                    )}
-                    style={{ width: `${detail.job.progress}%` }}
-                  />
-                </div>
-
-                {/* 任务信息网格 */}
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <div>
-                    <p className="text-xs text-slate-400">原始文件摘要</p>
-                    <p className="mt-1 break-all font-mono text-[11px] text-slate-700">
-                      {detail.evidence.sha256}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400">持久化任务适配器</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-700">
-                      {detail.job.analyzer_name}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400">算法版本</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-700">
-                      {detail.job.analyzer_version}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400">Worker 租约 / 尝试预算</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-700">
-                      {detail.dispatch.execution_mode === "external" ? "独立" : "内联"} ·{" "}
-                      {dispatchStateLabel[detail.dispatch.state]} ·{" "}
-                      {detail.dispatch.attempt_count}/{detail.dispatch.max_attempts}
-                    </p>
-                    {detail.dispatch.lease_expires_at ? (
-                      <p className="mt-1 text-[11px] text-slate-500">
-                        租约至{" "}
-                        {new Date(detail.dispatch.lease_expires_at).toLocaleTimeString(
-                          "zh-CN",
-                          { hour12: false }
-                        )}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-
-                {/* 轮询状态 */}
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3 text-[11px] text-slate-500">
-                  <span>
-                    {pollingPaused
-                      ? "自动轮询已暂停，请检查操作员 API Key 后手动刷新。"
-                      : pollFailures > 0
-                        ? `状态读取连续失败 ${pollFailures} 次，已指数退避，最长 15 秒。`
-                        : lastRefreshAt
-                          ? `最近成功读取：${lastRefreshAt.toLocaleTimeString("zh-CN", { hour12: false })}`
-                          : "等待首次从后端读取任务状态。"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPollingPaused(false);
-                      setPollFailures(0);
-                      void refreshJob(detail.job.id);
-                    }}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 hover:border-sky-400 hover:text-sky-700"
-                  >
-                    手动刷新
-                  </button>
-                </div>
+          {/* 01 / 工程语义锚点 */}
+          <section className="order-1 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm xl:order-none">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
+                  01 / 工程语义锚点
+                </p>
+                <h3 className="mt-2 text-lg font-semibold text-slate-900">
+                  {isRemediationMode
+                    ? "锁定原案件项目与设计基线"
+                    : "创建匿名项目与设计基线"}
+                </h3>
+                <p className="mt-1 text-sm leading-6 text-slate-500">
+                  {isRemediationMode
+                    ? "整改复验必须复用原案件的项目和基线，当前页面不允许替换。"
+                    : "每个证据必须绑定项目、工点、工序和基线版本。"}
+                </p>
               </div>
 
-              {/* Worker 尝试账本 */}
-              <section
-                className="overflow-hidden rounded-[22px] border border-slate-200 bg-white"
-                aria-labelledby="verification-attempt-history-title"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-[#0b1728] px-4 py-3 text-white">
-                  <div>
-                    <p id="verification-attempt-history-title" className="text-sm font-semibold">
-                      Worker 尝试账本
-                    </p>
-                    <p className="mt-1 text-[11px] leading-5 text-slate-300">
-                      每次领取与终态只追加一次；原始 Worker 标识不返回前端。
-                    </p>
-                  </div>
-                  <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 font-mono text-[11px] text-cyan-100">
-                    {detail.attempts.length} records
-                  </span>
+              <DatabaseIcon className="h-6 w-6 text-sky-600" />
+            </div>
+
+            {baseline && project ? (
+              <div className="mt-4 space-y-3 rounded-[22px] border border-emerald-200 bg-emerald-50 p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                  <CheckIcon className="h-4 w-4" />
+                  {isRemediationMode
+                    ? "原案件项目与基线已锁定"
+                    : "基线已持久化"}
                 </div>
 
-                {detail.attempts.length ? (
-                  <ol className="divide-y divide-slate-200">
-                    {detail.attempts.map((attempt) => {
-                      const outcome = attempt.outcome;
-                      return (
-                        <li key={attempt.id} className="relative px-4 py-4 sm:pl-12">
-                          <span className="absolute left-4 top-5 hidden h-5 w-5 items-center justify-center rounded-full border-2 border-sky-500 bg-white font-mono text-[9px] font-bold text-sky-700 sm:flex">
-                            {attempt.attempt_no}
-                          </span>
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-slate-900">
-                                Attempt #{attempt.attempt_no}
-                                <span className="ml-2 font-mono text-[11px] font-normal text-slate-400">
-                                  generation {attempt.generation}
-                                </span>
-                              </p>
-                              <p className="mt-1 text-[11px] text-slate-500">
-                                {new Date(attempt.claimed_at).toLocaleString("zh-CN", {
-                                  hour12: false,
-                                })}{" "}
-                                ·{" "}
-                                {attempt.execution_mode === "external"
-                                  ? "独立 Worker"
-                                  : "内联 Worker"}{" "}
-                                · {attempt.analyzer_name}@{attempt.analyzer_version}
-                              </p>
-                            </div>
-                            {outcome ? (
-                              <span
-                                className={cn(
-                                  "rounded-full border px-2.5 py-1 text-[11px] font-semibold",
-                                  attemptDispositionTone[outcome.disposition]
-                                )}
-                              >
-                                {attemptDispositionLabel[outcome.disposition]}
-                              </span>
-                            ) : (
-                              <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
-                                执行中
-                              </span>
-                            )}
-                          </div>
-                          <div className="mt-3 grid gap-2 text-[11px] text-slate-600 sm:grid-cols-2">
-                            <p>
-                              <span className="text-slate-400">Worker ref</span>
-                              <span
-                                className="ml-2 font-mono"
-                                title={attempt.worker_ref}
-                              >
-                                {shortWorkerRef(attempt.worker_ref)}
-                              </span>
-                            </p>
-                            <p>
-                              <span className="text-slate-400">当次预算</span>
-                              <span className="ml-2 font-mono">
-                                {attempt.attempt_no}/{attempt.max_attempts}
-                              </span>
-                            </p>
-                            {outcome?.stage ? (
-                              <p>
-                                <span className="text-slate-400">终态阶段</span>
-                                <span className="ml-2 font-mono">{outcome.stage}</span>
-                              </p>
-                            ) : null}
-                            {outcome ? (
-                              <p>
-                                <span className="text-slate-400">结束时间</span>
-                                <span className="ml-2">
-                                  {new Date(outcome.finished_at).toLocaleString(
-                                    "zh-CN",
-                                    { hour12: false }
+                <p className="text-sm text-slate-700">
+                  {project.name} · {baseline.site_id}
+                </p>
+
+                <p className="break-all font-mono text-[11px] text-slate-500">
+                  Project ID: {project.id}
+                </p>
+
+                <p className="break-all font-mono text-[11px] text-slate-500">
+                  Baseline ID: {baseline.id}
+                </p>
+
+                <p className="break-all font-mono text-[11px] text-slate-500">
+                  {baseline.sha256}
+                </p>
+
+                {remediationCaseDetail && remediationAttempt ? (
+                  <div className="rounded-[18px] border border-violet-200 bg-white/80 p-3 text-violet-900">
+                    <p className="text-xs font-semibold">
+                      {remediationCaseDetail.case.finding_code} · Attempt #{remediationAttempt.attempt_no}
+                    </p>
+
+                    <p className="mt-2 text-xs leading-5 text-violet-700">
+                      {remediationAttempt.action_description}
+                    </p>
+
+                    <p className="mt-2 break-all font-mono text-[11px] text-violet-600">
+                      Case ID: {remediationCaseDetail.case.id}
+                    </p>
+
+                    <p className="mt-1 break-all font-mono text-[11px] text-violet-600">
+                      Attempt ID: {remediationAttempt.id}
+                    </p>
+
+                    <p className="mt-1 text-[11px] text-violet-600">
+                      案件状态：{remediationCaseDetail.case.status} · Attempt 结论：{remediationAttempt.resolution_decision}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : isRemediationMode ? (
+              <div className="mt-5 rounded-[22px] border border-violet-200 bg-violet-50 p-4 text-sm text-violet-800">
+                {remediationContextLoading
+                  ? "正在读取并校验原案件、项目、设计基线与 Attempt…"
+                  : !operatorToken.trim()
+                    ? "请输入操作员 Key，以读取并锁定原案件项目与设计基线。"
+                    : "原案件上下文尚未通过校验，禁止初始化匿名项目。"}
+              </div>
+            ) : (
+              <button
+                disabled={busy !== null || health !== "ready" || !operatorToken.trim()}
+                onClick={bootstrap}
+                className="mt-5 w-full rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {busy === "bootstrap" ? "正在创建..." : "初始化匿名演示工点"}
+              </button>
+            )}
+          </section>
+
+
+          {/* 03 / 任务与结果 */}
+          <section className="order-3 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm xl:order-none">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
+                  03 / 任务与结果
+                </p>
+
+                <h3 className="mt-2 text-lg font-semibold text-slate-900">
+                  持久化处理状态
+                </h3>
+              </div>
+
+              {detail ? (
+                <span
+                  className={cn(
+                    "rounded-full px-3 py-1 text-xs font-semibold",
+                    detail.job.status === "failed"
+                      ? "bg-danger-light text-danger"
+                      : detail.job.status === "approved"
+                        ? "bg-success-light text-success"
+                        : detail.job.status === "needs_review"
+                          ? "bg-warning-light text-warning"
+                          : "bg-slate-100 text-slate-700"
+                  )}
+                >
+                  {statusLabel[detail.job.status] || detail.job.status}
+                </span>
+              ) : null}
+            </div>
+
+            {!detail ? (
+              <div className="mt-5 flex min-h-52 flex-col items-center justify-center rounded-[24px] border border-slate-200 bg-slate-50 text-center">
+                <AnalyticsIcon className="h-8 w-8 text-slate-300" />
+                <p className="mt-3 text-sm font-medium text-slate-500">
+                  提交文件后显示真实任务状态与输出
+                </p>
+              </div>
+            ) : (
+              <div className="mt-5 space-y-4">
+
+                {/* 任务进度条 */}
+                <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>任务进度</span>
+                    <span>{detail.job.progress}%</span>
+                  </div>
+
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all",
+                        detail.job.status === "failed"
+                          ? "bg-danger"
+                          : detail.job.status === "approved"
+                            ? "bg-success"
+                            : detail.job.status === "needs_review"
+                              ? "bg-warning"
+                              : "bg-sky-500"
+                      )}
+                      style={{ width: `${detail.job.progress}%` }}
+                    />
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div>
+                      <p className="text-xs text-slate-400">原始文件摘要</p>
+                      <p className="mt-1 break-all font-mono text-[11px] text-slate-700">
+                        {detail.evidence.sha256}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-slate-400">持久化任务适配器</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-700">
+                        {detail.job.analyzer_name}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-slate-400">算法版本</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-700">
+                        {detail.job.analyzer_version}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-slate-400">Worker 租约 / 尝试预算</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-700">
+                        {detail.dispatch.execution_mode === "external" ? "独立" : "内联"} ·{" "}
+                        {dispatchStateLabel[detail.dispatch.state]} ·{" "}
+                        {detail.dispatch.attempt_count}/{detail.dispatch.max_attempts}
+                      </p>
+
+                      {detail.dispatch.lease_expires_at ? (
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          租约至{" "}
+                          {new Date(detail.dispatch.lease_expires_at).toLocaleTimeString(
+                            "zh-CN",
+                            { hour12: false }
+                          )}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3 text-[11px] text-slate-500">
+                    <span>
+                      {pollingPaused
+                        ? "自动轮询已暂停，请检查操作员 API Key 后手动刷新。"
+                        : pollFailures > 0
+                          ? `状态读取连续失败 ${pollFailures} 次，已指数退避，最长 15 秒。`
+                          : lastRefreshAt
+                            ? `最近成功读取：${lastRefreshAt.toLocaleTimeString("zh-CN", {
+                              hour12: false,
+                            })}`
+                            : "等待首次从后端读取任务状态。"}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPollingPaused(false);
+                        setPollFailures(0);
+                        void refreshJob(detail.job.id);
+                      }}
+                      className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 hover:border-sky-400 hover:text-sky-700"
+                    >
+                      手动刷新
+                    </button>
+                  </div>
+                </div>
+
+                {/* Worker 尝试账本 */}
+                <section
+                  className="overflow-hidden rounded-[22px] border border-slate-200 bg-white"
+                  aria-labelledby="verification-attempt-history-title"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-[#0b1728] px-4 py-3 text-white">
+                    <div>
+                      <p
+                        id="verification-attempt-history-title"
+                        className="text-sm font-semibold"
+                      >
+                        Worker 尝试账本
+                      </p>
+
+                      <p className="mt-1 text-[11px] leading-5 text-slate-300">
+                        每次领取与终态只追加一次；原始 Worker 标识不返回前端。
+                      </p>
+                    </div>
+
+                    <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 font-mono text-[11px] text-cyan-100">
+                      {detail.attempts.length} records
+                    </span>
+                  </div>
+
+                  {detail.attempts.length ? (
+                    <ol className="divide-y divide-slate-200">
+                      {detail.attempts.map((attempt) => {
+                        const outcome = attempt.outcome;
+
+                        return (
+                          <li
+                            key={attempt.id}
+                            className="relative px-4 py-4 sm:pl-12"
+                          >
+                            <span className="absolute left-4 top-5 hidden h-5 w-5 items-center justify-center rounded-full border-2 border-sky-500 bg-white font-mono text-[9px] font-bold text-sky-700 sm:flex">
+                              {attempt.attempt_no}
+                            </span>
+
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">
+                                  Attempt #{attempt.attempt_no}
+                                  <span className="ml-2 font-mono text-[11px] font-normal text-slate-400">
+                                    generation {attempt.generation}
+                                  </span>
+                                </p>
+
+                                <p className="mt-1 text-[11px] text-slate-500">
+                                  {new Date(attempt.claimed_at).toLocaleString("zh-CN", {
+                                    hour12: false,
+                                  })}{" "}
+                                  ·{" "}
+                                  {attempt.execution_mode === "external"
+                                    ? "独立 Worker"
+                                    : "内联 Worker"}{" "}
+                                  · {attempt.analyzer_name}@{attempt.analyzer_version}
+                                </p>
+                              </div>
+
+                              {outcome ? (
+                                <span
+                                  className={cn(
+                                    "rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+                                    attemptDispositionTone[outcome.disposition]
                                   )}
+                                >
+                                  {attemptDispositionLabel[outcome.disposition]}
+                                </span>
+                              ) : (
+                                <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
+                                  执行中
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="mt-3 grid gap-2 text-[11px] text-slate-600 sm:grid-cols-2">
+                              <p>
+                                <span className="text-slate-400">Worker ref</span>
+                                <span
+                                  className="ml-2 font-mono"
+                                  title={attempt.worker_ref}
+                                >
+                                  {shortWorkerRef(attempt.worker_ref)}
                                 </span>
                               </p>
-                            ) : null}
-                          </div>
-                          {outcome?.result_sha256 ? (
-                            <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2">
-                              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-700">
-                                Result SHA-256
+
+                              <p>
+                                <span className="text-slate-400">当次预算</span>
+                                <span className="ml-2 font-mono">
+                                  {attempt.attempt_no}/{attempt.max_attempts}
+                                </span>
                               </p>
-                              <p className="mt-1 break-all font-mono text-[11px] text-emerald-900">
-                                {outcome.result_sha256}
-                              </p>
-                            </div>
-                          ) : null}
-                          {outcome?.error_code ? (
-                            <div className="mt-3 rounded-xl border border-rose-100 bg-rose-50/70 px-3 py-2 text-[11px] text-rose-800">
-                              <p className="font-mono font-semibold">
-                                {outcome.error_code} ·{" "}
-                                {outcome.error_retryable ? "可重试" : "不可重试"}
-                                {outcome.dead_lettered ? " · 已进入死信" : ""}
-                              </p>
-                              {outcome.error_message ? (
-                                <p className="mt-1 break-words leading-5">
-                                  {outcome.error_message}
+
+                              {outcome?.stage ? (
+                                <p>
+                                  <span className="text-slate-400">终态阶段</span>
+                                  <span className="ml-2 font-mono">
+                                    {outcome.stage}
+                                  </span>
+                                </p>
+                              ) : null}
+
+                              {outcome ? (
+                                <p>
+                                  <span className="text-slate-400">结束时间</span>
+                                  <span className="ml-2">
+                                    {new Date(outcome.finished_at).toLocaleString(
+                                      "zh-CN",
+                                      { hour12: false }
+                                    )}
+                                  </span>
                                 </p>
                               ) : null}
                             </div>
-                          ) : null}
-                          <details className="mt-3 text-[11px] text-slate-500">
-                            <summary className="cursor-pointer font-semibold text-slate-600 hover:text-sky-700">
-                              查看不可变输入摘要
-                            </summary>
-                            <div className="mt-2 space-y-1 rounded-xl bg-slate-50 px-3 py-2 font-mono">
-                              <p className="break-all">evidence {attempt.evidence_sha256}</p>
-                              <p className="break-all">baseline {attempt.baseline_sha256}</p>
-                              <p className="break-all">attempt {attempt.id}</p>
-                            </div>
-                          </details>
-                        </li>
-                      );
-                    })}
-                  </ol>
-                ) : (
-                  <div className="px-4 py-5 text-sm text-slate-500">
-                    任务尚未被 Worker 领取，因此还没有尝试记录。
-                  </div>
-                )}
-              </section>
 
-              {detail.job.result ? <AnalysisTruthPanel job={detail.job} /> : null}
-              {detail.job.status === "failed" ? (
-                <div className="rounded-[22px] border border-rose-200 bg-rose-50 p-4">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-rose-800"><XIcon className="h-4 w-4" /> 分析任务失败</div>
-                  <p className="mt-2 break-words text-xs leading-5 text-rose-700">{detail.job.error || "服务端未提供失败原因。"}</p>
-                  <p className="mt-2 text-xs leading-5 text-rose-600">{detail.recovery.reason} {detail.dispatch.state === "dead_letter" ? "该任务不会被启动恢复再次执行。" : "重试会复用原始证据、设计基线、算法版本和稳定幂等键。"}</p>
-                  <button type="button" disabled={busy !== null || !operatorToken.trim() || !detail.recovery.retryable} onClick={() => void retry()} className="mt-3 rounded-2xl bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-800 disabled:cursor-not-allowed disabled:bg-slate-300">{busy === "retry" ? "正在重新排队…" : detail.recovery.retryable ? "检查原因后显式重试" : "当前配置不允许重试"}</button>
-                </div>
-              ) : null}
-              {detail.recovery.action === "resume_sealing" ? (
-                <div className="rounded-[22px] border border-amber-300 bg-amber-50 p-4" role="status">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-amber-900"><InfoIcon className="h-4 w-4" /> 封存尚未完成，当前没有可交付的新报告或证据包</div>
-                  <p className="mt-2 text-xs leading-5 text-amber-800">后端持久态：{detail.recovery.operation_state || "unknown"} · 已尝试 {detail.recovery.attempt_count} 次。{detail.recovery.reason}</p>
-                  {detail.recovery.last_error ? <p className="mt-2 break-words rounded-xl bg-white/70 px-3 py-2 font-mono text-[11px] leading-5 text-amber-900">{detail.recovery.last_error}</p> : null}
-                  <p className="mt-2 text-xs leading-5 text-amber-700">继续操作会复用已冻结的复核、报告 ID、档案 ID 与账本记录；不会重新生成一套业务结论。</p>
-                  <button type="button" disabled={busy !== null || !reviewerToken.trim()} onClick={() => void resumeSealing()} className="mt-3 rounded-2xl bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-800 disabled:cursor-not-allowed disabled:bg-slate-300">{busy === "resume-sealing" ? "正在继续封存…" : "复核员继续封存"}</button>
-                </div>
-              ) : null}
-              {detail.recovery.action === "integrity_review" ? (
-                <div className="rounded-[22px] border border-rose-300 bg-rose-50 p-4" role="alert">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-rose-900"><XIcon className="h-4 w-4" /> 完整性异常，禁止自动继续</div>
-                  <p className="mt-2 text-xs leading-5 text-rose-800">{detail.recovery.reason}</p>
-                  {detail.recovery.last_error ? <p className="mt-2 break-words rounded-xl bg-white/70 px-3 py-2 font-mono text-[11px] leading-5 text-rose-900">{detail.recovery.last_error}</p> : null}
-                  <p className="mt-2 text-xs leading-5 text-rose-700">请先检查 readyz、SealOperation、报告/ZIP 摘要和 ledger；本页不会把完整性故障当成普通网络失败重试。</p>
-                </div>
-              ) : null}
-              {detail.evidence.id !== "pending" ? (
-                <EvidencePreview
-                  key={detail.evidence.id}
-                  evidenceId={detail.evidence.id}
-                  originalName={detail.evidence.original_name}
-                  sha256={detail.evidence.sha256}
-                  registeredSizeBytes={detail.evidence.size_bytes}
-                  autoLoad
-                />
-              ) : null}
-              {detail.job.result ? (
-                <details className="rounded-[22px] bg-[#081525] text-cyan-100">
-                  <summary className="cursor-pointer px-4 py-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">查看完整结构化输出</summary>
-                  <pre className="max-h-80 overflow-auto border-t border-white/10 p-4 text-[11px] leading-5">{JSON.stringify(detail.job.result, null, 2)}</pre>
-                </details>
-              ) : null}
-              {detail.job.status === "needs_review" ? (
-                <div className="rounded-[22px] border border-amber-200 bg-amber-50 p-4">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-amber-800"><InfoIcon className="h-4 w-4" /> 人工复核是封装前的强制门</div>
-                  <p className="mt-2 text-xs leading-5 text-amber-700">{persistedTaskTruth?.description}</p>
-                  {detail.remediation_attempt ? (
-                    <label className="mt-4 block text-xs font-semibold text-amber-900">
-                      整改复验结论
-                      <select
-                        value={remediationResolution}
-                        onChange={(event) => setRemediationResolution(event.target.value as "" | "resolved" | "not_resolved")}
-                        className="mt-2 w-full rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-amber-400"
+                            {outcome?.result_sha256 ? (
+                              <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-700">
+                                  Result SHA-256
+                                </p>
+
+                                <p className="mt-1 break-all font-mono text-[11px] text-emerald-900">
+                                  {outcome.result_sha256}
+                                </p>
+                              </div>
+                            ) : null}
+
+                            {outcome?.error_code ? (
+                              <div className="mt-3 rounded-xl border border-rose-100 bg-rose-50/70 px-3 py-2 text-[11px] text-rose-800">
+                                <p className="font-mono font-semibold">
+                                  {outcome.error_code} ·{" "}
+                                  {outcome.error_retryable ? "可重试" : "不可重试"}
+                                  {outcome.dead_lettered ? " · 已进入死信" : ""}
+                                </p>
+
+                                {outcome.error_message ? (
+                                  <p className="mt-1 break-words leading-5">
+                                    {outcome.error_message}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ) : null}
+
+                            <details className="mt-3 text-[11px] text-slate-500">
+                              <summary className="cursor-pointer font-semibold text-slate-600 hover:text-sky-700">
+                                查看不可变输入摘要
+                              </summary>
+
+                              <div className="mt-2 space-y-1 rounded-xl bg-slate-50 px-3 py-2 font-mono">
+                                <p className="break-all">
+                                  evidence {attempt.evidence_sha256}
+                                </p>
+                                <p className="break-all">
+                                  baseline {attempt.baseline_sha256}
+                                </p>
+                                <p className="break-all">
+                                  attempt {attempt.id}
+                                </p>
+                              </div>
+                            </details>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  ) : (
+                    <div className="px-4 py-5 text-sm text-slate-500">
+                      任务尚未被 Worker 领取，因此还没有尝试记录。
+                    </div>
+                  )}
+                </section>
+
+                {detail.job.result ? (
+                  <AnalysisTruthPanel job={detail.job} />
+                ) : null}
+
+                {detail.job.status === "failed" ? (
+                  <div className="rounded-[22px] border border-rose-200 bg-rose-50 p-4">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-rose-800">
+                      <XIcon className="h-4 w-4" /> 分析任务失败
+                    </div>
+
+                    <p className="mt-2 break-words text-xs leading-5 text-rose-700">
+                      {detail.job.error || "服务端未提供失败原因。"}
+                    </p>
+
+                    <p className="mt-2 text-xs leading-5 text-rose-600">
+                      {detail.recovery.reason}{" "}
+                      {detail.dispatch.state === "dead_letter"
+                        ? "该任务不会被启动恢复再次执行。"
+                        : "重试会复用原始证据、设计基线、算法版本和稳定幂等键。"}
+                    </p>
+
+                    <button
+                      type="button"
+                      disabled={
+                        busy !== null ||
+                        !operatorToken.trim() ||
+                        !detail.recovery.retryable
+                      }
+                      onClick={() => void retry()}
+                      className="mt-3 rounded-2xl bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    >
+                      {busy === "retry"
+                        ? "正在重新排队…"
+                        : detail.recovery.retryable
+                          ? "检查原因后显式重试"
+                          : "当前配置不允许重试"}
+                    </button>
+                  </div>
+                ) : null}
+
+                {detail.recovery.action === "resume_sealing" ? (
+                  <div
+                    className="rounded-[22px] border border-amber-300 bg-amber-50 p-4"
+                    role="status"
+                  >
+                    <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+                      <InfoIcon className="h-4 w-4" /> 封存尚未完成，当前没有可交付的新报告或证据包
+                    </div>
+
+                    <p className="mt-2 text-xs leading-5 text-amber-800">
+                      后端持久态：{detail.recovery.operation_state || "unknown"} ·
+                      已尝试 {detail.recovery.attempt_count} 次。
+                      {detail.recovery.reason}
+                    </p>
+
+                    {detail.recovery.last_error ? (
+                      <p className="mt-2 break-words rounded-xl bg-white/70 px-3 py-2 font-mono text-[11px] leading-5 text-amber-900">
+                        {detail.recovery.last_error}
+                      </p>
+                    ) : null}
+
+                    <p className="mt-2 text-xs leading-5 text-amber-700">
+                      继续操作会复用已冻结的复核、报告 ID、档案 ID 与账本记录；不会重新生成一套业务结论。
+                    </p>
+
+                    <button
+                      type="button"
+                      disabled={busy !== null || !reviewerToken.trim()}
+                      onClick={() => void resumeSealing()}
+                      className="mt-3 rounded-2xl bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    >
+                      {busy === "resume-sealing" ? "正在继续封存…" : "复核员继续封存"}
+                    </button>
+                  </div>
+                ) : null}
+
+                {detail.recovery.action === "integrity_review" ? (
+                  <div
+                    className="rounded-[22px] border border-rose-300 bg-rose-50 p-4"
+                    role="alert"
+                  >
+                    <div className="flex items-center gap-2 text-sm font-semibold text-rose-900">
+                      <XIcon className="h-4 w-4" /> 完整性异常，禁止自动继续
+                    </div>
+
+                    <p className="mt-2 text-xs leading-5 text-rose-800">
+                      {detail.recovery.reason}
+                    </p>
+
+                    {detail.recovery.last_error ? (
+                      <p className="mt-2 break-words rounded-xl bg-white/70 px-3 py-2 font-mono text-[11px] leading-5 text-rose-900">
+                        {detail.recovery.last_error}
+                      </p>
+                    ) : null}
+
+                    <p className="mt-2 text-xs leading-5 text-rose-700">
+                      请先检查 readyz、SealOperation、报告/ZIP 摘要和 ledger；本页不会把完整性故障当成普通网络失败重试。
+                    </p>
+                  </div>
+                ) : null}
+
+                {detail.evidence.id !== "pending" ? (
+                  <EvidencePreview
+                    key={detail.evidence.id}
+                    evidenceId={detail.evidence.id}
+                    originalName={detail.evidence.original_name}
+                    sha256={detail.evidence.sha256}
+                    registeredSizeBytes={detail.evidence.size_bytes}
+                    autoLoad
+                  />
+                ) : null}
+
+                {detail.job.result ? (
+                  <details className="rounded-[22px] bg-[#081525] text-cyan-100">
+                    <summary className="cursor-pointer px-4 py-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
+                      查看完整结构化输出
+                    </summary>
+
+                    <pre className="max-h-80 overflow-auto border-t border-white/10 p-4 text-[11px] leading-5">
+                      {JSON.stringify(detail.job.result, null, 2)}
+                    </pre>
+                  </details>
+                ) : null}
+
+                {detail.job.status === "needs_review" ? (
+                  <div className="rounded-[22px] border border-amber-200 bg-amber-50 p-4">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
+                      <InfoIcon className="h-4 w-4" /> 人工复核是封装前的强制门
+                    </div>
+
+                    <p className="mt-2 text-xs leading-5 text-amber-700">
+                      {persistedTaskTruth?.description}
+                    </p>
+
+                    {detail.remediation_attempt ? (
+                      <label className="mt-4 block text-xs font-semibold text-amber-900">
+                        整改复验结论
+
+                        <select
+                          value={remediationResolution}
+                          onChange={(event) =>
+                            setRemediationResolution(
+                              event.target.value as "" | "resolved" | "not_resolved"
+                            )
+                          }
+                          className="mt-2 w-full rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-amber-400"
+                        >
+                          <option value="" disabled>
+                            请选择复验结论
+                          </option>
+                          <option value="resolved">
+                            复验证据支持“已解决”
+                          </option>
+                          <option value="not_resolved">
+                            复验证据不支持关闭，继续整改
+                          </option>
+                        </select>
+
+                        <span className="mt-2 block font-normal leading-5 text-amber-700">
+                          关闭动作会绑定本次新报告和新证据包，不修改原始案件报告。
+                        </span>
+                      </label>
+                    ) : null}
+
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                      <button
+                        disabled={
+                          busy !== null ||
+                          !reviewerToken.trim() ||
+                          Boolean(detail.remediation_attempt && !remediationResolution)
+                        }
+                        onClick={() => review("approve")}
+                        className="w-full rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 sm:flex-1"
                       >
-                        <option value="" disabled>请选择复验结论</option>
-                        <option value="resolved">复验证据支持“已解决”</option>
-                        <option value="not_resolved">复验证据不支持关闭，继续整改</option>
-                      </select>
-                      <span className="mt-2 block font-normal leading-5 text-amber-700">关闭动作会绑定本次新报告和新证据包，不修改原始案件报告。</span>
-                    </label>
-                  ) : null}
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                    <button disabled={busy !== null || !reviewerToken.trim() || Boolean(detail.remediation_attempt && !remediationResolution)} onClick={() => review("approve")} className="w-full rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 sm:flex-1">{detail.remediation_attempt ? remediationResolution === "resolved" ? "批准、生成证据包并关闭案件" : remediationResolution === "not_resolved" ? "批准证据并继续整改" : "请先选择复验结论" : "批准记录并生成证据包"}</button>
-                    <button disabled={busy !== null || !reviewerToken.trim()} onClick={() => review("reject")} className="w-full rounded-2xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:text-slate-400 sm:w-auto">驳回</button>
+                        {detail.remediation_attempt
+                          ? remediationResolution === "resolved"
+                            ? "批准、生成证据包并关闭案件"
+                            : remediationResolution === "not_resolved"
+                              ? "批准证据并继续整改"
+                              : "请先选择复验结论"
+                          : "批准记录并生成证据包"}
+                      </button>
+
+                      <button
+                        disabled={busy !== null || !reviewerToken.trim()}
+                        onClick={() => review("reject")}
+                        className="w-full rounded-2xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:text-slate-400 sm:w-auto"
+                      >
+                        驳回
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </section>
+
+        </div>
+        <div className="contents xl:flex xl:flex-col xl:gap-5">
+
+          {/* 02 / 原始输入 */}
+          <section className="order-2 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm xl:order-none">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
+                  02 / 原始输入
+                </p>
+
+                <h3 className="mt-2 text-lg font-semibold text-slate-900">
+                  选择视频或现场图片
+                </h3>
+              </div>
+
+              <CameraIcon className="h-6 w-6 text-sky-600" />
+            </div>
+
+            <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-[24px] border border-dashed border-sky-300 bg-sky-50/70 px-5 py-8 text-center hover:bg-sky-50">
+              <CameraIcon className="h-8 w-8 text-sky-500" />
+
+              <span className="mt-3 text-sm font-semibold text-slate-800">
+                {file ? file.name : "点击选择本地证据文件"}
+              </span>
+
+              <span className="mt-1 text-xs text-slate-500">
+                MP4 / MOV / AVI / MKV / WebM / JPG / PNG
+              </span>
+
+              <input
+                className="sr-only"
+                type="file"
+                accept="video/*,image/jpeg,image/png"
+                onChange={(event) =>
+                  setFile(event.target.files?.[0] || null)
+                }
+              />
+            </label>
+
+            {file ? (
+              <p className="mt-3 text-xs text-slate-500">
+                {(file.size / 1024 / 1024).toFixed(2)} MB · 哈希由服务端重新计算
+              </p>
+            ) : null}
+
+            <div className="mt-5">
+              <label
+                className="text-xs font-semibold text-slate-600"
+                htmlFor="analyzer"
+              >
+                处理适配器
+              </label>
+
+              <select
+                id="analyzer"
+                value={analyzer}
+                onChange={(event) =>
+                  setAnalyzer(event.target.value as AnalyzerName)
+                }
+                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-sky-400"
+              >
+                <option value="stub">
+                  安全占位器：不输出物理测量
+                </option>
+
+                <option
+                  value="demo_fixture"
+                  disabled={!meta?.adapters.demo_fixture?.enabled}
+                >
+                  演示夹具：仅测试流程，非真实推理
+                </option>
+
+                <option
+                  value="remote_http"
+                  disabled={!meta?.adapters.remote_http?.enabled}
+                >
+                  远程单样本推理（未评测）
+                </option>
+              </select>
+
+              <p className="mt-2 text-xs leading-5 text-amber-700">
+                {analyzer === "stub"
+                  ? "当前不会生成虚假准确率或测量值。"
+                  : analyzer === "demo_fixture"
+                    ? "演示夹具会在报告和证据包中标记 evidence_grade=false。"
+                    : "媒体只发送到部署时固定的算法端点；单样本结果仍为 evidence_grade=false、accuracy_claim=null。"}
+              </p>
+            </div>
+
+            <label
+              className="mt-4 block text-xs font-semibold text-slate-600"
+              htmlFor="remediation-attempt-id"
+            >
+              {isRemediationMode
+                ? "整改复验 Attempt ID（已由案件页锁定）"
+                : "整改复验 Attempt ID"}
+
+              <input
+                id="remediation-attempt-id"
+                value={remediationAttemptId}
+                readOnly
+                placeholder="普通任务留空；整改复验请从案件页进入"
+                className="mt-2 w-full cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-mono text-xs text-slate-800 outline-none"
+              />
+            </label>
+
+            <p className="mt-2 text-xs leading-5 text-violet-700">
+              {isRemediationMode
+                ? "上传前已校验 Attempt 归属，并锁定原案件项目与设计基线。"
+                : "普通任务保持为空；整改复验必须从告警与整改页的具体 Attempt 进入。"}
+            </p>
+
+            <button
+              disabled={
+                !baseline ||
+                !file ||
+                busy !== null ||
+                !operatorToken.trim() ||
+                remediationContextLoading ||
+                (isRemediationMode &&
+                  (!remediationCaseDetail ||
+                    !remediationAttempt ||
+                    Boolean(remediationAttempt.verification_job_id)))
+              }
+              onClick={submit}
+              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              <AnalyticsIcon className="h-4 w-4" />
+
+              {busy === "upload"
+                ? "上传并创建任务..."
+                : "提交真实后端任务"}
+            </button>
+          </section>
+
+
+          {/* 04 / 可信交付 */}
+          {proof && report && (
+            <section className="order-4 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm xl:order-none">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
+                    04 / 可信交付
+                  </p>
+
+                  <h3 className="mt-2 text-lg font-semibold text-slate-900">
+                    报告、证据包与严格核验
+                  </h3>
+                </div>
+
+                <BlockchainIcon className="h-6 w-6 text-sky-600" />
+              </div>
+
+              {persistedReportTruth ? (
+                <div className="mt-4">
+                  <TruthBadge truth={persistedReportTruth} />
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    {persistedReportTruth.description}
+                  </p>
+                </div>
+              ) : null}
+
+              {persistedReportBoundary.length ? (
+                <div
+                  className="mt-4 rounded-[20px] border border-amber-200 bg-amber-50 p-4"
+                  aria-label="报告内持久化真实性边界"
+                >
+                  <p className="text-xs font-semibold text-amber-900">
+                    报告内持久化真实性边界
+                  </p>
+
+                  <ul className="mt-2 space-y-1.5 text-xs leading-5 text-amber-800">
+                    {persistedReportBoundary.map((item, index) => (
+                      <li key={`${index}-${item}`}>· {item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs text-slate-400">档案编号</p>
+                  <p className="mt-2 break-all text-sm font-semibold text-slate-800">
+                    {proof.archive_id}
+                  </p>
+                </div>
+
+                <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs text-slate-400">证据等级 / 用途</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-800">
+                    {proof.evidence_grade ? "正式证据" : "非正式证据"} · {proof.purpose}
+                  </p>
+                </div>
+
+                <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
+                  <p className="text-xs text-slate-400">证据包 SHA-256</p>
+                  <p className="mt-2 break-all font-mono text-[11px] text-slate-700">
+                    {proof.archive_sha256}
+                  </p>
+                </div>
+
+                <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
+                  <p className="text-xs text-slate-400">Merkle Root</p>
+                  <p className="mt-2 break-all font-mono text-[11px] text-slate-700">
+                    {proof.merkle_root}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <button
+                  onClick={() =>
+                    void api
+                      .downloadReport(report.id, "json")
+                      .catch((reason) =>
+                        setError(
+                          reason instanceof Error
+                            ? reason.message
+                            : "报告下载失败"
+                        )
+                      )
+                  }
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 hover:border-sky-300 hover:text-sky-700"
+                >
+                  <DownloadIcon className="h-4 w-4" />
+                  JSON 报告
+                </button>
+
+                <button
+                  onClick={() =>
+                    void api
+                      .downloadArchive(proof.id)
+                      .catch((reason) =>
+                        setError(
+                          reason instanceof Error
+                            ? reason.message
+                            : "证据包下载失败"
+                        )
+                      )
+                  }
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 hover:border-sky-300 hover:text-sky-700"
+                >
+                  <DownloadIcon className="h-4 w-4" />
+                  证据包
+                </button>
+
+                <button
+                  disabled={busy !== null}
+                  onClick={verify}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-600 px-3 py-3 text-sm font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  <ShieldIcon className="h-4 w-4" />
+                  重新校验
+                </button>
+              </div>
+
+              {integrity ? (
+                <div
+                  className={cn(
+                    "mt-4 rounded-[22px] border p-4",
+                    integrity.valid
+                      ? "border-emerald-200 bg-emerald-50"
+                      : "border-rose-200 bg-rose-50"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "flex items-center gap-2 text-sm font-semibold",
+                      integrity.valid
+                        ? "text-emerald-700"
+                        : "text-rose-700"
+                    )}
+                  >
+                    {integrity.valid ? (
+                      <CheckIcon className="h-4 w-4" />
+                    ) : (
+                      <XIcon className="h-4 w-4" />
+                    )}
+
+                    {integrity.valid
+                      ? "逐项摘要一致，当前证据包未检测到篡改"
+                      : "校验失败，证据包已被修改或链路不完整"}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {Object.entries(integrity.checks).map(([key, valid]) => (
+                      <div
+                        key={key}
+                        className="rounded-xl bg-white/70 px-3 py-2 text-[11px] text-slate-600"
+                      >
+                        {valid ? "✓" : "×"} {key}
+                      </div>
+                    ))}
                   </div>
                 </div>
               ) : null}
-            </div>
+            </section>
           )}
-        </section>
+        </div>
 
-        {/* 04 / 可信交付（条件渲染） */}
-        {proof && report ? (
-          <section className="xl:col-start-2 xl:col-end-3 xl:row-start-2 xl:row-end-3 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">04 / 可信交付</p><h3 className="mt-2 text-lg font-semibold text-slate-900">报告、证据包与严格核验</h3></div>
-              <BlockchainIcon className="h-6 w-6 text-sky-600" />
-            </div>
-            {persistedReportTruth ? <div className="mt-4"><TruthBadge truth={persistedReportTruth} /><p className="mt-2 text-xs leading-5 text-slate-500">{persistedReportTruth.description}</p></div> : null}
-            {persistedReportBoundary.length ? (
-              <div className="mt-4 rounded-[20px] border border-amber-200 bg-amber-50 p-4" aria-label="报告内持久化真实性边界">
-                <p className="text-xs font-semibold text-amber-900">报告内持久化真实性边界</p>
-                <ul className="mt-2 space-y-1.5 text-xs leading-5 text-amber-800">
-                  {persistedReportBoundary.map((item, index) => <li key={`${index}-${item}`}>· {item}</li>)}
-                </ul>
-              </div>
-            ) : null}
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4"><p className="text-xs text-slate-400">档案编号</p><p className="mt-2 break-all text-sm font-semibold text-slate-800">{proof.archive_id}</p></div>
-              <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4"><p className="text-xs text-slate-400">证据等级 / 用途</p><p className="mt-2 text-sm font-semibold text-slate-800">{proof.evidence_grade ? "正式证据" : "非正式证据"} · {proof.purpose}</p></div>
-              <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4 sm:col-span-2"><p className="text-xs text-slate-400">证据包 SHA-256</p><p className="mt-2 break-all font-mono text-[11px] text-slate-700">{proof.archive_sha256}</p></div>
-              <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4 sm:col-span-2"><p className="text-xs text-slate-400">Merkle Root</p><p className="mt-2 break-all font-mono text-[11px] text-slate-700">{proof.merkle_root}</p></div>
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <button onClick={() => void api.downloadReport(report.id, "json").catch((reason) => setError(reason instanceof Error ? reason.message : "报告下载失败"))} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 hover:border-sky-300 hover:text-sky-700"><DownloadIcon className="h-4 w-4" /> JSON 报告</button>
-              <button onClick={() => void api.downloadArchive(proof.id).catch((reason) => setError(reason instanceof Error ? reason.message : "证据包下载失败"))} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 hover:border-sky-300 hover:text-sky-700"><DownloadIcon className="h-4 w-4" /> 证据包</button>
-              <button disabled={busy !== null} onClick={verify} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-600 px-3 py-3 text-sm font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"><ShieldIcon className="h-4 w-4" /> 重新校验</button>
-            </div>
-            {integrity ? (
-              <div className={cn("mt-4 rounded-[22px] border p-4", integrity.valid ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50")}>
-                <div className={cn("flex items-center gap-2 text-sm font-semibold", integrity.valid ? "text-emerald-700" : "text-rose-700")}>
-                  {integrity.valid ? <CheckIcon className="h-4 w-4" /> : <XIcon className="h-4 w-4" />}
-                  {integrity.valid ? "逐项摘要一致，当前证据包未检测到篡改" : "校验失败，证据包已被修改或链路不完整"}
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">{Object.entries(integrity.checks).map(([key, valid]) => <div key={key} className="rounded-xl bg-white/70 px-3 py-2 text-[11px] text-slate-600">{valid ? "✓" : "×"} {key}</div>)}</div>
-              </div>
-            ) : null}
-          </section>
-        ) : null}
       </div>
 
       <section className="rounded-[28px] border border-amber-200 bg-amber-50 p-5">
