@@ -15,11 +15,14 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Path mapping */
-    "baseUrl": ".",
+    /* Path mapping 解决路径识别问题 */
+    // "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     },
+
+    /* 消除 TypeScript 7.0 的弃用警告 */
+    "ignoreDeprecations": "5.0",
 
     /* Linting */
     "strict": true,

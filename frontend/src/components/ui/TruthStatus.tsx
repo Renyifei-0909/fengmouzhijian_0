@@ -14,6 +14,7 @@ const toneClasses: Record<TruthTone, string> = {
   violet: "border-violet-200 bg-violet-100 text-violet-800",
   emerald: "border-emerald-200 bg-emerald-100 text-emerald-800",
   rose: "border-rose-200 bg-rose-100 text-rose-800",
+  error: "border-red-200 bg-red-100 text-red-800",  // 新增
 };
 
 const panelToneClasses: Record<TruthTone, { panel: string; text: string; divider: string; icon: string }> = {
@@ -22,6 +23,7 @@ const panelToneClasses: Record<TruthTone, { panel: string; text: string; divider
   violet: { panel: "border-violet-200 bg-violet-50", text: "text-violet-800", divider: "border-violet-200", icon: "text-violet-700" },
   emerald: { panel: "border-emerald-200 bg-emerald-50", text: "text-emerald-800", divider: "border-emerald-200", icon: "text-emerald-700" },
   rose: { panel: "border-rose-200 bg-rose-50", text: "text-rose-800", divider: "border-rose-200", icon: "text-rose-700" },
+  error: { panel: "border-red-200 bg-red-50", text: "text-red-800", divider: "border-red-200", icon: "text-red-700" },  // 新增
 };
 
 export const TruthBadge: React.FC<{ truth: TruthDescriptor; className?: string }> = ({ truth, className = "" }) => (

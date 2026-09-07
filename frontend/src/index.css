@@ -1,16 +1,26 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-50: #e6f4ff;
-  --color-brand-100: #bae0ff;
-  --color-brand-200: #91caff;
-  --color-brand-300: #69b1ff;
-  --color-brand-400: #4096ff;
-  --color-brand-500: #1677ff;
-  --color-brand-600: #0958d9;
-  --color-brand-700: #0842a0;
-  --color-brand-800: #062e6f;
-  --color-brand-900: #031d54;
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #1677ff;
+  --color-primary-600: #0958d9;
+  --color-primary-700: #073b8c;
+  --color-primary-800: #052a6a;
+  --color-primary-900: #031d4a;
+
+  --color-success: #10b981;
+  --color-success-light: #d1fae5;
+  --color-warning: #f59e0b;
+  --color-warning-light: #fef3c7;
+  --color-danger: #f43f5e;
+  --color-danger-light: #fecdd3;
+  --color-audit: #8b5cf6;
+  --color-audit-light: #ede9fe;
+  --color-demo: #a855f7;      /* 紫色用于合成/演示标识 */
 }
 
 html {
@@ -22,9 +32,9 @@ html {
 body {
   @apply text-slate-900 antialiased;
   background:
-    radial-gradient(circle at top, rgba(125, 211, 252, 0.28), transparent 26%),
-    radial-gradient(circle at right top, rgba(59, 130, 246, 0.16), transparent 24%),
-    linear-gradient(180deg, #f5fbff 0%, #f8fbff 22%, #f8fafc 100%);
+    radial-gradient(circle at 30% 10%, rgba(22, 119, 255, 0.06), transparent 40%),
+    linear-gradient(180deg, #f0f6fe 0%, #f8fafc 100%);
+  background-attachment: fixed;
 }
 
 button,
@@ -36,7 +46,7 @@ textarea {
 }
 
 ::selection {
-  background: rgba(14, 165, 233, 0.18);
+  background: rgba(22, 119, 255, 0.18);
 }
 
 .page-enter {
@@ -53,3 +63,20 @@ textarea {
     transform: translateY(0);
   }
 }
+
+/* 自定义工具类（可选） */
+.border-success { border-color: var(--color-success); }
+.bg-success-light { background-color: var(--color-success-light); }
+.text-success { color: var(--color-success); }
+
+.border-warning { border-color: var(--color-warning); }
+.bg-warning-light { background-color: var(--color-warning-light); }
+.text-warning { color: var(--color-warning); }
+
+.border-danger { border-color: var(--color-danger); }
+.bg-danger-light { background-color: var(--color-danger-light); }
+.text-danger { color: var(--color-danger); }
+
+.border-audit { border-color: var(--color-audit); }
+.bg-audit-light { background-color: var(--color-audit-light); }
+.text-audit { color: var(--color-audit); }

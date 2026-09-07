@@ -1,6 +1,6 @@
 import type { Report, VerificationJob } from "./api";
 
-export type TruthTone = "slate" | "amber" | "violet" | "emerald" | "rose";
+export type TruthTone = 'slate' | 'amber' | 'violet' | 'emerald' | 'rose' | 'error';
 
 export type TruthDescriptor = {
   label: string;

@@ -118,7 +118,7 @@ export const AlarmsPage: React.FC = () => {
 
   const visible = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLocaleLowerCase();
-    return cases.filter((item) => {
+    const filtered = cases.filter((item) => {
       if (scope !== "all" && item.scope !== scope) return false;
       if (statusFilter !== "all" && item.status !== statusFilter) return false;
       if (!normalizedKeyword) return true;
@@ -130,7 +130,15 @@ export const AlarmsPage: React.FC = () => {
       ].join(" ").toLocaleLowerCase();
       return searchable.includes(normalizedKeyword);
     });
+    // 按严重程度排序：critical > error > warning > info
+    const severityOrder = { critical: 0, error: 1, warning: 2, info: 3 };
+    return filtered.sort((a, b) => {
+      const aSev = a.confirmed_severity || a.proposed_severity;
+      const bSev = b.confirmed_severity || b.proposed_severity;
+      return (severityOrder[aSev as keyof typeof severityOrder] ?? 99) - (severityOrder[bSev as keyof typeof severityOrder] ?? 99);
+    });
   }, [cases, keyword, projectNames, scope, statusFilter]);
+
 
   const openDetail = async (caseId: string) => {
     setBusy(`detail:${caseId}`);
@@ -297,7 +305,11 @@ export const AlarmsPage: React.FC = () => {
             const truth = truthDescriptor(item);
             const severity = item.confirmed_severity || item.proposed_severity;
             return (
-              <article key={item.id} data-testid="finding-case-card" className="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm transition hover:border-sky-200 hover:shadow-md">
+              <article key={item.id}
+                className={cn(
+                  "rounded-[26px] border bg-white p-4 shadow-sm transition hover:border-sky-200 hover:shadow-md",
+                  item.status === "pending_triage" && "border-warning animate-pulse"
+                )}>
                 <div className="flex items-start gap-3">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white"><BellIcon className="h-5 w-5" /></div>
                   <div className="min-w-0 flex-1">

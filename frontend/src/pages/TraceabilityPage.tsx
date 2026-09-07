@@ -74,7 +74,26 @@ export const TraceabilityPage: React.FC = () => {
           <div className="mt-4 grid gap-3 sm:grid-cols-3"><button disabled={!selected || verifying} onClick={() => void verify()} className="rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300">{verifying ? "正在重算…" : "执行完整性核验"}</button><button disabled={!selected} onClick={() => selected && void navigator.clipboard.writeText(selected.archive_sha256).then(() => setNotice("完整 SHA-256 已复制。"))} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 disabled:text-slate-300"><ClipboardIcon className="h-4 w-4" /> 复制摘要</button><button disabled={!selected} onClick={() => selected && void api.downloadArchive(selected.id).catch((reason) => setError(reason.message))} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 disabled:text-slate-300"><DownloadIcon className="h-4 w-4" /> 下载证据包</button></div>
         </div>
 
-        {integrity ? <div className={cn("rounded-[28px] border p-5", integrity.valid ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50")}><h3 className={cn("font-semibold", integrity.valid ? "text-emerald-800" : "text-rose-800")}>逐项核验结果</h3><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{Object.entries(integrity.checks).map(([key, valid]) => <div key={key} className="rounded-2xl bg-white/80 px-3 py-2 text-xs text-slate-700">{valid ? "✓" : "×"} {key}</div>)}</div>{integrity.errors.length ? <div className="mt-3 text-xs text-rose-700">{integrity.errors.join("；")}</div> : null}</div> : null}
+        {integrity ? (
+          <div className={cn("rounded-[28px] border p-5", integrity.valid ? "border-success-light bg-success-light/60" : "border-danger-light bg-danger-light/60")}>
+            <h3 className={cn("font-semibold", integrity.valid ? "text-success" : "text-danger")}>逐项核验结果</h3>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {Object.entries(integrity.checks).map(([key, valid]) => (
+                <div key={key} className={cn("rounded-2xl bg-white/80 px-3 py-2 text-xs", valid ? "text-slate-700" : "text-danger font-semibold")}>
+                  {valid ? "✓" : "✗"} {key}
+                </div>
+              ))}
+            </div>
+            {!integrity.valid && integrity.errors.length > 0 && (
+              <div className="mt-3 rounded-xl border border-danger-light bg-white/50 p-3">
+                <p className="text-xs font-semibold text-danger">失败详情：</p>
+                <ul className="mt-2 list-disc pl-5 text-xs text-danger">
+                  {integrity.errors.map((err, i) => <li key={i}>{err}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : null}
       </section>
     </div>
   </div>;
