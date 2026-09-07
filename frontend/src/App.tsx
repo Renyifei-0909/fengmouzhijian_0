@@ -105,7 +105,7 @@ const AppShell: React.FC = () => {
     if (path.startsWith("/work-orders/")) {
       return { title: "施工工单", subtitle: "现场资料提交与核验" };
     }
-    return PAGE_META[path] || { title: "锋眸智鉴", subtitle: "通信工程施工合规管理平台" };
+    return PAGE_META[path] || { title: "烽眸智鉴", subtitle: "通信工程施工合规管理平台" };
   };
 
   const meta = getPageMeta();

@@ -28,9 +28,11 @@ export const Sidebar: React.FC = () => {
       <div className="flex h-full flex-col">
         <div className="border-b border-white/10 px-5 py-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 to-blue-600 shadow-lg shadow-sky-700/30">
-              <ShieldIcon className="h-5 w-5 text-white" />
-            </div>
+            <img
+              src="/brand/app-logo.png"
+              alt="烽眸智鉴 Logo"
+              className="h-11 w-11 shrink-0 rounded-xl object-cover shadow-lg shadow-sky-700/30"
+            />
             <div>
               <p className="text-sm font-semibold tracking-wide text-white">{PRODUCT.name}</p>
               <p className="mt-1 text-xs leading-4 text-sky-200/80">{PRODUCT.subtitle}</p>

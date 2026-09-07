@@ -1,12 +1,12 @@
 /**
- * Product-facing copy and status labels for 锋眸智鉴.
+ * Product-facing copy and status labels for 烽眸智鉴.
  * API enums remain English; only display strings are mapped here.
  */
 
 export const PRODUCT = {
-  name: "锋眸智鉴",
+  name: "烽眸智鉴",
   subtitle: "通信工程施工合规管理平台",
-  defaultPageTitle: "锋眸智鉴",
+  defaultPageTitle: "烽眸智鉴",
 } as const;
 
 /** Primary commercial navigation (routes still point at existing pages). */

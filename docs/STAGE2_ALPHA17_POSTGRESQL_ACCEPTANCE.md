@@ -183,7 +183,7 @@ powershell -File E:\Workspaces\xtx\fengmou-tools\postgresql\start-acceptance-pg.
 
 # 3) 验收
 $env:FENGMOU_POSTGRES_ACCEPTANCE_URL = 'postgresql+psycopg://fengmou_app:local-postgres-app-acceptance-only@127.0.0.1:55432/fengmou_acceptance'
-cd E:\Workspaces\xtx\项目\锋眸智鉴\code\backend
+cd E:\Workspaces\xtx\项目\烽眸智鉴\code\backend
 .\.venv\Scripts\python.exe scripts\postgres_acceptance.py --jobs 8 --workers 4
 
 # 4) 停止

@@ -44,7 +44,7 @@ const WorkerShellInner: React.FC<React.PropsWithChildren> = ({ children }) => {
               <HardHat className="h-5 w-5" aria-hidden="true" />
             </div>
             <div>
-              <p className="text-sm font-semibold">锋眸智鉴</p>
+              <p className="text-sm font-semibold">烽眸智鉴</p>
               <p className="mt-1 text-xs text-slate-400">现场作业端</p>
             </div>
           </div>
@@ -74,7 +74,7 @@ const WorkerShellInner: React.FC<React.PropsWithChildren> = ({ children }) => {
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-8">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-slate-500 lg:hidden">锋眸智鉴 · 现场作业端</p>
+              <p className="text-xs font-medium text-slate-500 lg:hidden">烽眸智鉴 · 现场作业端</p>
               <h1 className="truncate text-lg font-semibold text-slate-950">{title}</h1>
             </div>
             <div
