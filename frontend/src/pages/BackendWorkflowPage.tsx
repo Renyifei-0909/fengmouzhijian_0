@@ -99,14 +99,10 @@ export const BackendWorkflowPage: React.FC = () => {
   const queryAttemptId = searchParams.get("attemptId")?.trim() || "";
   const isRemediationMode = Boolean(queryCaseId || queryAttemptId);
   const [health, setHealth] = useState<"checking" | "ready" | "offline">("checking");
-  const [operatorToken, setOperatorToken] = useState(() => {
-    const stored = localStorage.getItem("FENGMOU_OPERATOR_TOKEN");
-    return stored || import.meta.env.VITE_OPERATOR_API_KEY || "";
-  });
-  const [reviewerToken, setReviewerToken] = useState(() => {
-    const stored = localStorage.getItem("FENGMOU_REVIEWER_TOKEN");
-    return stored || import.meta.env.VITE_REVIEWER_API_KEY || "";
-  });
+  // Session-only keys: never persist to localStorage so a wrong paste cannot
+  // permanently override the built-in key; a page reload always recovers.
+  const [operatorToken, setOperatorToken] = useState(() => import.meta.env.VITE_OPERATOR_API_KEY || "");
+  const [reviewerToken, setReviewerToken] = useState(() => import.meta.env.VITE_REVIEWER_API_KEY || "");
   const [meta, setMeta] = useState<CapabilityMeta | null>(null);
   const [operations, setOperations] = useState<VerificationOperationsSnapshot | null>(null);
   const [operationsLoading, setOperationsLoading] = useState(false);
@@ -708,14 +704,12 @@ export const BackendWorkflowPage: React.FC = () => {
             <input type="password" autoComplete="new-password" value={operatorToken} onChange={(event) => {
               const value = event.target.value;
               setOperatorToken(value);
-              localStorage.setItem("FENGMOU_OPERATOR_TOKEN", value);
             }} placeholder="FENGMOU_OPERATOR_API_KEY" className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 font-mono text-sm outline-none focus:border-sky-400" />
           </label>
           <label className="w-full min-w-0 flex-1 text-xs font-semibold text-slate-600 lg:min-w-64">复核员 Key
             <input type="password" autoComplete="new-password" value={reviewerToken} onChange={(event) => {
               const value = event.target.value;
               setReviewerToken(value);
-              localStorage.setItem("FENGMOU_REVIEWER_TOKEN", value);
             }} placeholder="FENGMOU_REVIEWER_API_KEY" className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 font-mono text-sm outline-none focus:border-sky-400" />
           </label>
         </div>

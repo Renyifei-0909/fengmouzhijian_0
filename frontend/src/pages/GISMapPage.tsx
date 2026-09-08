@@ -46,6 +46,7 @@ export const GISMapPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  const [hasSelectedGpkg, setHasSelectedGpkg] = useState(false);
   const [notice, setNotice] = useState("");
   const [creatingWo, setCreatingWo] = useState(false);
   const [mobileTab, setMobileTab] = useState<"map" | "objects" | "orders">("map");
@@ -133,6 +134,7 @@ export const GISMapPage: React.FC = () => {
 
   useEffect(() => {
     if (!projectId) return;
+    setHasSelectedGpkg(false);
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -256,6 +258,7 @@ export const GISMapPage: React.FC = () => {
 
   const selectedProject = projects.find((p) => p.id === projectId) ?? null;
   const latestPackage = packages[0] ?? null;
+  const hasImportedMap = hasSelectedGpkg;
 
   return (
     <div className="space-y-4 page-enter">
@@ -417,6 +420,7 @@ export const GISMapPage: React.FC = () => {
               projectId={projectId}
               disabled={loading}
               onImported={(result) => void onGpkgImported(result)}
+              onFileSelected={() => setHasSelectedGpkg(true)}
             />
           ) : null}
           <section className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
@@ -561,14 +565,27 @@ export const GISMapPage: React.FC = () => {
             <h3 className="text-sm font-semibold text-slate-900">{COPY.mapTitle}</h3>
           </div>
           <div className="h-[min(52vh,480px)] min-h-[280px] w-full lg:h-[min(62vh,560px)]">
-            <GeoMap
-              objects={summary?.objects ?? []}
-              selectedObjectId={selectedObjectId}
-              onSelectObject={onSelectObject}
-              captureMarker={captureMarker}
-              onlineStyleUrl={onlineStyleUrl}
-              className="h-full w-full"
-            />
+            {hasImportedMap ? (
+              <GeoMap
+                objects={summary?.objects ?? []}
+                selectedObjectId={selectedObjectId}
+                onSelectObject={onSelectObject}
+                captureMarker={captureMarker}
+                onlineStyleUrl={onlineStyleUrl}
+                showQgisProject
+                className="h-full w-full"
+              />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center bg-slate-50 px-6 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-600">
+                  <MapIcon className="h-6 w-6" />
+                </div>
+                <p className="mt-4 text-sm font-semibold text-slate-800">尚未导入工程地图</p>
+                <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">
+                  请先在左侧选择并上传 GeoPackage 文件，随后将在这里显示空间分布。
+                </p>
+              </div>
+            )}
           </div>
           <p className="border-t border-slate-100 px-4 py-2 text-[11px] leading-4 text-slate-500">
             {COPY.mapFooter}
