@@ -24,6 +24,7 @@ type Props = {
   projectId: string;
   disabled?: boolean;
   onImported?: (result: StandardGpkgImportResult) => void;
+  onFileSelected?: (file: File) => void;
 };
 
 function shortFingerprint(sha: string): string {
@@ -53,7 +54,12 @@ function suggestPackageCode(projectId: string): string {
   return `PKG-${suffix}-${stamp}`;
 }
 
-export const GpkgImportPanel: React.FC<Props> = ({ projectId, disabled, onImported }) => {
+export const GpkgImportPanel: React.FC<Props> = ({
+  projectId,
+  disabled,
+  onImported,
+  onFileSelected,
+}) => {
   const fileRef = useRef<HTMLInputElement>(null);
   const confirmLock = useRef(false);
   const precheckLock = useRef(false);
@@ -136,6 +142,7 @@ export const GpkgImportPanel: React.FC<Props> = ({ projectId, disabled, onImport
     invalidatePreview("selecting");
     setFile(f);
     setMessage(null);
+    onFileSelected?.(f);
   };
 
   const onPackageCodeChange = (value: string) => {
@@ -261,6 +268,9 @@ export const GpkgImportPanel: React.FC<Props> = ({ projectId, disabled, onImport
 
   const showConfirmButton = phase === "preview_ready" && preview?.valid === true;
   const packageCodeLocked = phase === "preview_ready" || phase === "confirming";
+  const hasHiddenError = ["preview_invalid", "token_expired", "conflict", "network_error"].includes(
+    phase,
+  );
 
   return (
     <section className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm" data-testid="gpkg-import-panel">
@@ -346,19 +356,29 @@ export const GpkgImportPanel: React.FC<Props> = ({ projectId, disabled, onImport
       </div>
 
       {statusLabel ? (
-        <p className="mb-2 text-[11px] font-medium text-slate-700" role="status" data-testid="gpkg-status">
+        <p
+          className={cn("mb-2 text-[11px] font-medium text-slate-700", hasHiddenError && "hidden")}
+          role="status"
+          data-testid="gpkg-status"
+        >
           {statusLabel}
         </p>
       ) : null}
       {message ? (
-        <p className="mb-2 text-[11px] leading-4 text-slate-600" data-testid="gpkg-message">
+        <p
+          className={cn("mb-2 text-[11px] leading-4 text-slate-600", hasHiddenError && "hidden")}
+          data-testid="gpkg-message"
+        >
           {message}
         </p>
       ) : null}
 
       {preview ? (
         <div
-          className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-[11px] text-slate-700"
+          className={cn(
+            "space-y-2 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-[11px] text-slate-700",
+            !preview.valid && "hidden",
+          )}
           data-testid="gpkg-preview-card"
         >
           <div className="flex flex-wrap gap-x-3 gap-y-1 break-all">
