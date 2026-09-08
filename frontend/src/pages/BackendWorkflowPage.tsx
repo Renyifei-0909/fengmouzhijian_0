@@ -642,7 +642,7 @@ export const BackendWorkflowPage: React.FC = () => {
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-medium text-cyan-100">
               <ShieldIcon className="h-4 w-4" /> 工程核验 · 全链路可追溯
             </div>
-            <h2 className="text-3xl font-semibold tracking-tight">每一条结论，都能回到原始证据</h2>
+            <h2 className="text-3xl font-semibold tracking-tight">核验有据，追溯可查</h2>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
               本页展示完整核验闭环：原始证据上传 → 服务端校验 → 结构化处理 → 人工复核 → 报告与证据包封装，全程可追溯、可审计。
             </p>
