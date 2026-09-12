@@ -37,7 +37,7 @@ const WorkerShellInner: React.FC<React.PropsWithChildren> = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-[#f3f5f7] text-slate-950">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-slate-800 bg-[#101820] text-white lg:flex lg:flex-col">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-slate-800 brand-hero text-white lg:flex lg:flex-col">
         <div className="border-b border-white/10 px-5 py-5">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl ring-1 ring-white/15">

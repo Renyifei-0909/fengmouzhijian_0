@@ -626,7 +626,7 @@ export const BackendWorkflowPage: React.FC = () => {
 
   return (
     <div className="space-y-5 page-enter">
-      <section className="relative overflow-hidden rounded-[30px] border border-sky-300/30 bg-[#07172b] px-6 py-7 text-white shadow-[0_26px_90px_-45px_rgba(3,105,161,0.9)]">
+      <section className="relative overflow-hidden rounded-[30px] border border-sky-300/30 brand-hero px-6 py-7 text-white shadow-[0_26px_90px_-45px_rgba(3,105,161,0.9)]">
         <div className="absolute inset-0 opacity-60 [background-image:linear-gradient(rgba(56,189,248,.07)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,.07)_1px,transparent_1px)] [background-size:32px_32px]" />
         <div className="absolute -right-20 -top-28 h-72 w-72 rounded-full bg-sky-400/20 blur-3xl" />
 
@@ -663,7 +663,7 @@ export const BackendWorkflowPage: React.FC = () => {
               ["算法", persistedTaskTruth?.label || "尚未提交任务"],
               ["存证", "本地哈希链"],
             ].map(([label, value]) => (
-              <div key={label} className="min-w-0 rounded-2xl bg-slate-950/35 px-2 py-2 sm:px-3 sm:py-3">
+              <div key={label} className="min-w-0 rounded-2xl bg-white/10 px-2 py-2 sm:px-3 sm:py-3">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-sky-300">{label}</p>
                 <p className="mt-1 text-xs font-semibold text-white sm:text-sm break-words whitespace-normal" title={value}>
                   {value}
@@ -717,7 +717,7 @@ export const BackendWorkflowPage: React.FC = () => {
 
       <section
         aria-labelledby="verification-operations-title"
-        className="relative overflow-hidden rounded-[28px] border border-slate-700 bg-[#0a1421] text-white shadow-[0_22px_65px_-42px_rgba(15,23,42,0.95)]"
+        className="relative overflow-hidden rounded-[28px] border border-white/15 brand-hero text-white shadow-[0_22px_65px_-42px_rgba(15,23,42,0.95)]"
       >
         <div className="absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(148,163,184,.06)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.06)_1px,transparent_1px)] [background-size:24px_24px]" />
         <div className="relative border-b border-white/10 px-5 py-5">
@@ -754,7 +754,7 @@ export const BackendWorkflowPage: React.FC = () => {
 
         <div className="relative p-5">
           {!operatorToken.trim() ? (
-            <div className="rounded-2xl border border-dashed border-slate-600 bg-slate-900/55 px-4 py-5 text-sm text-slate-400">
+            <div className="rounded-2xl border border-dashed border-white/25 bg-white/5 px-4 py-5 text-sm text-slate-300">
               输入操作员 Key 后才能读取聚合调度状态；该端点不会公开任务 ID 或 Worker 标识。
             </div>
           ) : null}
@@ -1105,7 +1105,7 @@ export const BackendWorkflowPage: React.FC = () => {
                   className="overflow-hidden rounded-[22px] border border-slate-200 bg-white"
                   aria-labelledby="verification-attempt-history-title"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-[#0b1728] px-4 py-3 text-white">
+                  <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 bg-[#0d3f86] px-4 py-3 text-white">
                     <div>
                       <p
                         id="verification-attempt-history-title"
@@ -1384,7 +1384,7 @@ export const BackendWorkflowPage: React.FC = () => {
                 ) : null}
 
                 {detail.job.result ? (
-                  <details className="rounded-[22px] bg-[#081525] text-cyan-100">
+                  <details className="rounded-[22px] bg-[#0d3f86]/70 text-cyan-50">
                     <summary className="cursor-pointer px-4 py-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
                       查看完整结构化输出
                     </summary>
@@ -1770,13 +1770,6 @@ export const BackendWorkflowPage: React.FC = () => {
         </div>
 
       </div>
-
-      <section className="rounded-[28px] border border-amber-200 bg-amber-50 p-5">
-        <div className="flex items-start gap-3">
-          <InfoIcon className="mt-0.5 h-5 w-5 text-amber-700" />
-          <div><h3 className="text-sm font-semibold text-amber-900">当前真实能力边界</h3><p className="mt-2 text-sm leading-6 text-amber-800">这是批处理 MVP，不是直播流实时监管；设计基线由人工绑定，不是自动空间配准；本地哈希链可检出篡改，但不是区块链、司法存证或可信时间戳。竞赛 85%/90% 指标尚未验证。</p></div>
-        </div>
-      </section>
     </div>
   );
 };

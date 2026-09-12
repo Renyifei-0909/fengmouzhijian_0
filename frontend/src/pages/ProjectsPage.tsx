@@ -90,7 +90,7 @@ export const ProjectsPage: React.FC = () => {
       {notice ? <Notice type="success" message={notice} /> : null}
       {error ? <Notice type="info" message={error} /> : null}
 
-      <section className="overflow-hidden rounded-[30px] border border-sky-300/20 bg-[#07172b] px-6 py-6 text-white shadow-[0_26px_90px_-50px_rgba(3,105,161,.9)]">
+      <section className="overflow-hidden rounded-[30px] border border-sky-300/20 brand-hero px-6 py-6 text-white shadow-[0_26px_90px_-50px_rgba(3,105,161,.9)]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100"><DatabaseIcon className="h-4 w-4" /> 后端实时项目库</div>
@@ -98,9 +98,9 @@ export const ProjectsPage: React.FC = () => {
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">项目、基线与复核进度实时汇总，基线覆盖率仅为代理指标。</p>
           </div>
           <div className="grid grid-cols-3 gap-2 rounded-3xl border border-white/10 bg-white/5 p-3">
-            <div className="rounded-2xl bg-slate-950/30 px-4 py-3"><p className="text-[11px] tracking-[.08em] text-sky-300">项目总数</p><p className="mt-1 text-xl font-semibold">{projects.length}</p></div>
-            <div className="rounded-2xl bg-slate-950/30 px-4 py-3"><p className="text-[11px] tracking-[.08em] text-sky-300">设计基线</p><p className="mt-1 text-xl font-semibold">{Object.values(progress).reduce((sum, item) => sum + item.baseline_count, 0)}</p></div>
-            <div className="rounded-2xl bg-slate-950/30 px-4 py-3"><p className="text-[11px] tracking-[.08em] text-sky-300">待复核</p><p className="mt-1 text-xl font-semibold">{Object.values(progress).reduce((sum, item) => sum + item.pending_review_count, 0)}</p></div>
+            <div className="rounded-2xl bg-white/10 px-4 py-3"><p className="text-[11px] tracking-[.08em] text-sky-300">项目总数</p><p className="mt-1 text-xl font-semibold">{projects.length}</p></div>
+            <div className="rounded-2xl bg-white/10 px-4 py-3"><p className="text-[11px] tracking-[.08em] text-sky-300">设计基线</p><p className="mt-1 text-xl font-semibold">{Object.values(progress).reduce((sum, item) => sum + item.baseline_count, 0)}</p></div>
+            <div className="rounded-2xl bg-white/10 px-4 py-3"><p className="text-[11px] tracking-[.08em] text-sky-300">待复核</p><p className="mt-1 text-xl font-semibold">{Object.values(progress).reduce((sum, item) => sum + item.pending_review_count, 0)}</p></div>
           </div>
         </div>
       </section>
@@ -116,7 +116,7 @@ export const ProjectsPage: React.FC = () => {
       {showFilter ? <div className="flex flex-wrap gap-2 rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">{statusTabs.map((tab) => <button key={tab.value} aria-pressed={filter === tab.value} onClick={() => setFilter(tab.value)} className={cn("rounded-full px-3 py-1.5 text-xs font-medium", filter === tab.value ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-700")}>{tab.label}</button>)}<button aria-label="关闭筛选选项" onClick={() => setShowFilter(false)} className="ml-auto rounded-full p-1 text-slate-400"><XIcon className="h-4 w-4" /></button></div> : null}
 
       {loading ? <div className="rounded-[28px] border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">正在读取后端项目数据…</div> : null}
-      {!loading && filtered.length === 0 ? <div className="rounded-[28px] border border-dashed border-slate-300 bg-white p-12 text-center"><ShieldIcon className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">当前筛选下没有项目</p></div> : null}
+      {!loading && filtered.length === 0 ? <div className="rounded-[28px] border border-dashed border-slate-300 bg-white p-12 text-center"><ShieldIcon className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">当前筛选下暂无项目</p></div> : null}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((project) => {

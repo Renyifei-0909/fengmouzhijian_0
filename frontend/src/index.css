@@ -38,22 +38,32 @@ body {
 }
 
 /*
- * 主内容区背景：使用高清原图（1672×941）+ 浅色蒙板。
- * cover 自适应任意分辨率与窗口尺寸；蒙板保证卡片与文字对比度。
+ * 主内容区背景：使用高清原图（1672×941）+ 轻量蓝色蒙板。
+ * cover 自适应任意分辨率与窗口尺寸；背景图案轻微可见，同时保证文字对比度。
  */
 .app-shell-bg {
   background-image:
     linear-gradient(
       180deg,
-      rgba(248, 251, 255, 0.88) 0%,
-      rgba(240, 246, 253, 0.9) 42%,
-      rgba(244, 249, 255, 0.9) 100%
+      rgba(213, 231, 252, 0.78) 0%,
+      rgba(221, 237, 253, 0.82) 42%,
+      rgba(216, 234, 252, 0.84) 100%
     ),
     url("/brand/app-bg.jpg");
   background-size: cover, cover;
   background-position: center top, center top;
   background-repeat: no-repeat, no-repeat;
   background-attachment: fixed, fixed;
+}
+
+/*
+ * 品牌深蓝面板：替代近黑底色，统一全站深色区块（顶图卡片/运维面板等）。
+ */
+.brand-hero {
+  background-image:
+    radial-gradient(900px 340px at 88% -14%, rgba(56, 189, 248, 0.32), transparent 62%),
+    linear-gradient(135deg, #0a2a5c 0%, #0e3c80 52%, #1259ad 100%);
+  background-size: cover, cover;
 }
 
 /*

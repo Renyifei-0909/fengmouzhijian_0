@@ -112,7 +112,7 @@ export const ProjectDetailPage: React.FC = () => {
 
   return <div className="space-y-5 page-enter">
     {error ? <Notice type="info" message={error} /> : null}
-    <section className="relative overflow-hidden rounded-[30px] border border-sky-300/20 bg-[#07172b] p-6 text-white">
+    <section className="relative overflow-hidden rounded-[30px] border border-sky-300/20 brand-hero p-6 text-white">
       <div className="absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(56,189,248,.07)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,.07)_1px,transparent_1px)] [background-size:32px_32px]" />
       <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div><div className="flex flex-wrap gap-2"><span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">{project.code}</span><span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">{project.status}</span></div><h2 className="mt-4 text-2xl font-semibold">{project.name}</h2><p className="mt-2 text-sm text-slate-300">{project.location} · {project.manager || "未指定负责人"}</p><p className="mt-3 max-w-2xl text-xs leading-5 text-slate-400">项目 ID {project.id}</p></div>
@@ -167,7 +167,7 @@ export const ProjectDetailPage: React.FC = () => {
       </div>
     </section>
 
-    <div className="flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800"><InfoIcon className="mt-0.5 h-4 w-4" /><span>最新任务：{latestJob && latestTruth ? `${jobLabel[latestJob.status] || latestJob.status}，${latestTruth.label}` : "暂无"}。已批准基线覆盖率是证据交付代理指标，不代表施工形象进度或算法准确率。</span></div>
+    <div className="flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800"><InfoIcon className="mt-0.5 h-4 w-4" /><span>最新任务：{latestJob && latestTruth ? `${jobLabel[latestJob.status] || latestJob.status}，${latestTruth.label}` : "暂无"}。</span></div>
   </div>;
 };
 

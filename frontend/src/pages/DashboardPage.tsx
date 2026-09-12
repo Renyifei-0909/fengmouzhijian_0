@@ -68,7 +68,7 @@ export const DashboardPage: React.FC = () => {
   return <div className="space-y-5 page-enter">
     {error ? <Notice type="info" message={error} /> : null}
 
-    <section className="relative overflow-hidden rounded-[30px] border border-cyan-300/15 bg-[#061526] px-6 py-6 text-white shadow-[0_30px_100px_-50px_rgba(8,145,178,.95)]">
+    <section className="relative overflow-hidden rounded-[30px] border border-cyan-300/15 brand-hero px-6 py-6 text-white shadow-[0_30px_100px_-50px_rgba(8,145,178,.95)]">
       <div className="absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(56,189,248,.06)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,.06)_1px,transparent_1px)] [background-size:34px_34px]" />
       <div className="absolute -right-16 -top-24 h-72 w-72 rounded-full bg-cyan-400/15 blur-3xl" />
       <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
@@ -78,7 +78,7 @@ export const DashboardPage: React.FC = () => {
           ["原始证据", summary?.evidence_assets ?? "—"],
           ["待复核", summary ? pendingReview : "—"],
           ["完整性档案", summary?.proof_archives ?? "—"],
-        ].map(([label, value]) => <div key={String(label)} className="rounded-2xl bg-slate-950/30 px-4 py-3"><p className="text-[11px] tracking-[.08em] text-cyan-200/80">{label}</p><p className="mt-2 text-2xl font-semibold">{value}</p></div>)}</div>
+        ].map(([label, value]) => <div key={String(label)} className="rounded-2xl bg-white/10 px-4 py-3"><p className="text-[11px] tracking-[.08em] text-cyan-200/80">{label}</p><p className="mt-2 text-2xl font-semibold">{value}</p></div>)}</div>
       </div>
     </section>
 

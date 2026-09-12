@@ -31,7 +31,7 @@ export const WorkerProfilePage: React.FC = () => {
     <div className="mx-auto max-w-2xl space-y-5">
       <section className="border-b border-slate-200 pb-5">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#0d3f86] text-white">
             <UserRound className="h-5 w-5" />
           </div>
           <div>
@@ -88,7 +88,7 @@ export const WorkerProfilePage: React.FC = () => {
           <button
             type="submit"
             disabled={!workerId.trim()}
-            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#0d3f86] px-4 text-sm font-semibold text-white hover:bg-[#0a2a5c] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
             {saved ? <Check className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
             {saved ? "已保存" : "保存身份"}

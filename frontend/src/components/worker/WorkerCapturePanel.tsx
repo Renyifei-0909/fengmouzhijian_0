@@ -104,7 +104,7 @@ function captureResult(bundle: CaptureBundle): {
 function StepHeading({ step, title, description }: { step: number; title: string; description: string }) {
   return (
     <div className="flex items-start gap-3">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-bold text-white">{step}</span>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0d3f86] text-sm font-bold text-white">{step}</span>
       <div>
         <h3 className="text-base font-semibold text-slate-950">{title}</h3>
         <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
@@ -515,7 +515,7 @@ export const WorkerCapturePanel: React.FC<Props> = ({ workOrder, onWorkOrderUpda
             type="button"
             onClick={requestLocation}
             disabled={locating || uploading}
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[#0d3f86] px-4 text-sm font-semibold text-white hover:bg-[#0a2a5c] disabled:opacity-50"
           >
             <Crosshair className={cn("h-4 w-4", locating && "animate-spin")} />
             {position ? "重新定位" : "获取定位"}
@@ -552,7 +552,7 @@ export const WorkerCapturePanel: React.FC<Props> = ({ workOrder, onWorkOrderUpda
           onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
         />
         {file && previewUrl ? (
-          <div className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
+          <div className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-[#0a1c33]">
             {file.type.startsWith("image/") ? (
               <img src={previewUrl} alt="待提交现场照片预览" className="max-h-80 w-full object-contain" />
             ) : (
@@ -591,7 +591,7 @@ export const WorkerCapturePanel: React.FC<Props> = ({ workOrder, onWorkOrderUpda
                 onClick={() => setSafetyState(value)}
                 className={cn(
                   "flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2 text-xs font-semibold sm:text-sm",
-                  safetyState === value ? "border-slate-950 bg-slate-950 text-white" : "border-slate-300 bg-white text-slate-700",
+                  safetyState === value ? "border-[#0d3f86] bg-[#0d3f86] text-white" : "border-slate-300 bg-white text-slate-700",
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" /> <span className="truncate">{label}</span>
@@ -659,7 +659,7 @@ export const WorkerCapturePanel: React.FC<Props> = ({ workOrder, onWorkOrderUpda
                     type="button"
                     onClick={() => void syncDraft(draft, true)}
                     disabled={!navigator.onLine || uploading}
-                    className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white disabled:opacity-50 sm:flex-none"
+                    className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-[#0d3f86] px-3 text-xs font-semibold text-white disabled:opacity-50 sm:flex-none"
                   >
                     <RefreshCw className="h-3.5 w-3.5" /> {draft.state === "attention" ? "确认后重试" : "立即同步"}
                   </button>

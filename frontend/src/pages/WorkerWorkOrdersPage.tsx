@@ -204,7 +204,7 @@ export const WorkerWorkOrdersPage: React.FC = () => {
       <div className="mx-auto max-w-xl rounded-lg border border-amber-200 bg-amber-50 p-5 text-amber-950">
         <h2 className="font-semibold">请先设置作业身份</h2>
         <p className="mt-2 text-sm leading-6">设置人员编号后，系统才会加载分配给本人或所属班组的工单。</p>
-        <Link to="/worker/profile" className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white">
+        <Link to="/worker/profile" className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-[#0d3f86] px-4 text-sm font-semibold text-white">
           前往账号设置
         </Link>
       </div>
@@ -287,7 +287,7 @@ export const WorkerWorkOrdersPage: React.FC = () => {
             className={cn(
               "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3 text-sm font-medium",
               bucket === item
-                ? "border-slate-950 bg-slate-950 text-white"
+                ? "border-[#0d3f86] bg-[#0d3f86] text-white"
                 : "border-slate-300 bg-white text-slate-700",
             )}
           >

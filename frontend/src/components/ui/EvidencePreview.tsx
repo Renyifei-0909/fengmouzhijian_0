@@ -102,7 +102,7 @@ const EvidencePreviewSession: React.FC<EvidencePreviewProps> = ({
   return (
     <figure
       aria-busy={loading}
-      className="overflow-hidden rounded-[24px] border border-slate-700 bg-[#06111f] text-white shadow-[0_22px_70px_-42px_rgba(2,132,199,.9)]"
+      className="overflow-hidden rounded-[24px] border border-white/10 bg-[#0a1c33] text-white shadow-[0_22px_70px_-42px_rgba(2,132,199,.9)]"
     >
       <div className="flex flex-col gap-3 border-b border-white/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">

@@ -83,11 +83,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, width, onToggle, on
         aria-label="拖动调整导航宽度"
         onPointerDown={handlePointerDown}
         className={cn(
-          "group absolute right-0 top-0 z-50 h-full w-2 cursor-col-resize touch-none",
+          "group absolute right-0 top-0 z-50 h-full w-3 cursor-col-resize touch-none",
           collapsed && "pointer-events-none opacity-0",
         )}
       >
-        <div className="absolute right-0.5 top-1/2 h-16 w-1 -translate-y-1/2 rounded-full bg-white/0 transition-colors duration-200 group-hover:bg-sky-300/70" />
+        <div className="absolute right-1 top-1/2 h-20 w-1 -translate-y-1/2 rounded-full bg-white/0 transition-colors duration-200 group-hover:bg-sky-300/70" />
       </div>
 
       {/* 顶部：品牌区 + 收起/展开按钮 */}
@@ -101,22 +101,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, width, onToggle, on
               draggable={false}
             />
           </div>
-          {!collapsed ? (
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold tracking-wide text-white">{PRODUCT.name}</p>
-              <p className="mt-1 truncate text-xs leading-4 text-sky-200/80">{PRODUCT.subtitle}</p>
-            </div>
-          ) : null}
+          <div
+            className={cn(
+              "min-w-0 overflow-hidden transition-all duration-200 ease-out",
+              collapsed ? "w-0 opacity-0" : "w-auto opacity-100",
+            )}
+            aria-hidden={collapsed}
+          >
+            <p className="truncate text-sm font-semibold tracking-wide text-white">{PRODUCT.name}</p>
+            <p className="mt-1 truncate text-xs leading-4 text-sky-200/80">{PRODUCT.subtitle}</p>
+          </div>
         </div>
         <button
           type="button"
           onClick={onToggle}
           aria-label={collapsed ? "展开导航" : "收起导航"}
           title={collapsed ? "展开导航" : "收起导航"}
-          className="absolute -right-3.5 top-7 z-50 flex h-7 w-7 items-center justify-center rounded-full border border-sky-300/30 bg-[#0b1a33] text-sky-200 shadow-lg transition hover:border-sky-300/60 hover:bg-[#12294d] hover:text-white"
+          className="absolute -right-4 top-7 z-50 flex h-8 w-8 items-center justify-center rounded-full border border-sky-300/30 bg-[#0b1a33] text-sky-200 shadow-lg transition hover:border-sky-300/60 hover:bg-[#12294d] hover:text-white"
         >
           <ChevronRightIcon
-            className={cn("h-3.5 w-3.5 transition-transform duration-200", !collapsed && "rotate-180")}
+            className={cn("h-4 w-4 transition-transform duration-200", !collapsed && "rotate-180")}
           />
         </button>
       </div>
@@ -181,15 +185,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, width, onToggle, on
             </div>
             <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-[#0a1730]" />
           </div>
-          {!collapsed ? (
-            <>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-white">{COPY.identityRole}</p>
-                <p className="mt-0.5 truncate text-[11px] text-sky-200/70">{COPY.identityOrg}</p>
-              </div>
-              <ChevronDownIcon className="h-4 w-4 shrink-0 text-sky-200/50" />
-            </>
-          ) : null}
+          <div
+            className={cn(
+              "flex min-w-0 flex-1 items-center gap-3 overflow-hidden transition-all duration-200 ease-out",
+              collapsed ? "w-0 opacity-0" : "w-auto opacity-100",
+            )}
+            aria-hidden={collapsed}
+          >
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-white">{COPY.identityRole}</p>
+              <p className="mt-0.5 truncate text-[11px] text-sky-200/70">{COPY.identityOrg}</p>
+            </div>
+            <ChevronDownIcon className="h-4 w-4 shrink-0 text-sky-200/50" />
+          </div>
         </div>
       </div>
     </aside>

@@ -566,6 +566,31 @@ const PREVIEWABLE_EVIDENCE_TYPES = new Set([
   "image/png",
 ]);
 
+/**
+ * 面向用户的错误文案：屏蔽 HTTP 状态码等技术细节，原始信息只输出到控制台。
+ * 业务校验类提示（4xx 且服务端返回可读信息）保留原文，其余走通用文案。
+ */
+function describeHttpError(status: number, detail: unknown): string {
+  console.warn("[api] HTTP", status, detail);
+  if (status === 401) return "鉴权失败：访问密钥无效，请联系管理员";
+  if (status === 403) return "当前角色没有该操作权限";
+  if (status === 404) return "请求的资源不存在或已被移除";
+  if (status === 413) return "文件体积超出限制";
+  if (status >= 500) return "服务暂时不可用，请稍后重试";
+  if (typeof detail === "string" && detail.trim()) {
+    // 4xx 业务提示通常为可读中文，直接展示；同时兜底过滤服务端文件路径
+    return detail
+      .replace(/[A-Za-z]:\\[^\s"']+/g, "[path]")
+      .replace(/\/(?:var|home|Users|tmp)\/[^\s"']+/g, "[path]");
+  }
+  if (detail && typeof detail === "object") {
+    const d = detail as { message?: unknown; detail?: unknown };
+    if (typeof d.message === "string" && d.message.trim()) return d.message;
+    if (typeof d.detail === "string" && d.detail.trim()) return d.detail;
+  }
+  return "操作未能完成，请稍后重试";
+}
+
 async function request<T>(path: string, init?: RequestInit, role: AuthRole = "operator"): Promise<T> {
   const headers = new Headers(init?.headers);
   const apiKey = role === "reviewer" ? reviewerApiKey : role === "operator" ? operatorApiKey : "";
@@ -574,26 +599,18 @@ async function request<T>(path: string, init?: RequestInit, role: AuthRole = "op
   try {
     response = await fetch(`${API_BASE}${path}`, { ...init, headers });
   } catch (reason) {
-    const message = reason instanceof Error ? reason.message : "网络连接失败";
-    throw new ApiRequestError(message, null);
+    console.warn("[api] 网络请求失败：", reason);
+    throw new ApiRequestError("网络连接异常，请稍后重试", null);
   }
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     const detail = body?.detail;
-    let message = `请求失败 (${response.status})`;
     let errorCode: string | null = null;
-    if (typeof detail === "string") {
-      message = detail;
-    } else if (detail && typeof detail === "object") {
-      const d = detail as { error_code?: unknown; message?: unknown; detail?: unknown };
+    if (detail && typeof detail === "object") {
+      const d = detail as { error_code?: unknown };
       if (typeof d.error_code === "string") errorCode = d.error_code;
-      if (typeof d.message === "string") message = d.message;
-      else if (typeof d.detail === "string") message = d.detail;
-      else message = JSON.stringify(detail);
     }
-    // Never surface raw filesystem paths from servers
-    message = message.replace(/[A-Za-z]:\\[^\s"']+/g, "[path]").replace(/\/(?:var|home|Users|tmp)\/[^\s"']+/g, "[path]");
-    throw new ApiRequestError(message, response.status, errorCode);
+    throw new ApiRequestError(describeHttpError(response.status, detail), response.status, errorCode);
   }
   return response.json() as Promise<T>;
 }
@@ -604,7 +621,7 @@ async function download(path: string, filename: string): Promise<void> {
   const response = await fetch(`${API_BASE}${path}`, { headers });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(typeof body?.detail === "string" ? body.detail : `下载失败 (${response.status})`);
+    throw new Error(describeHttpError(response.status, body?.detail ?? null));
   }
   const url = URL.createObjectURL(await response.blob());
   const anchor = document.createElement("a");
@@ -630,11 +647,7 @@ async function fetchEvidenceContent(
   );
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(
-      typeof body?.detail === "string"
-        ? body.detail
-        : `原始证据读取失败 (${response.status})`,
-    );
+    throw new Error(describeHttpError(response.status, body?.detail ?? null));
   }
   const blob = await response.blob();
   return {
