@@ -1054,7 +1054,7 @@ export const BackendWorkflowPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <p className="text-xs text-slate-400">Worker 租约 / 尝试预算</p>
+                      <p className="text-xs text-slate-400">执行器租约 / 尝试预算</p>
                       <p className="mt-1 text-sm font-semibold text-slate-700">
                         {detail.dispatch.execution_mode === "external" ? "独立" : "内联"} ·{" "}
                         {dispatchStateLabel[detail.dispatch.state]} ·{" "}

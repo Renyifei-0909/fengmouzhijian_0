@@ -212,7 +212,7 @@ export const AlarmsPage: React.FC = () => {
         expected_version: selected.case.version,
         action_description: attemptDescription.trim(),
       });
-      setNotice(`整改尝试 #${attempt.attempt_no} 已创建；请从该 Attempt 进入真实闭环页上传复验证据。`);
+      setNotice(`整改记录已创建（第 ${attempt.attempt_no} 次）；请从该记录进入真实闭环页上传复验证据。`);
       setAttemptDescription("");
       await refresh(selected.case.id);
     } catch (reasonValue) {
@@ -248,7 +248,7 @@ export const AlarmsPage: React.FC = () => {
             </div>
             <h2 className="mt-4 text-2xl font-semibold tracking-tight md:text-3xl">告警与整改，不把模型建议冒充现场事实</h2>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
-              Analyzer finding 首先是候选 observation。只有复核角色确认后才成为运营案件；整改关闭必须绑定新的复验任务、报告和可核验证据包。
+              分析器产出首先是候选观察结论，只有复核角色确认后才成为运营案件；整改关闭必须绑定新的复验任务、报告与可核验证据包。
             </p>
           </div>
           <button onClick={() => void refresh(selected?.case.id)} disabled={loading} className="rounded-2xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-50">
@@ -274,7 +274,7 @@ export const AlarmsPage: React.FC = () => {
           <label className="flex flex-1 items-center rounded-2xl border border-slate-200 px-3 py-2.5">
             <SearchIcon className="mr-2 h-4 w-4 text-slate-400" />
             <span className="sr-only">搜索案件</span>
-            <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索项目、finding code、内容或负责人" className="w-full bg-transparent text-sm outline-none" />
+            <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索项目、问题编号、内容或负责人" className="w-full bg-transparent text-sm outline-none" />
           </label>
           <button aria-pressed={showFilters} onClick={() => setShowFilters((value) => !value)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700">
             <FilterIcon className="h-4 w-4" /> 筛选
@@ -333,7 +333,7 @@ export const AlarmsPage: React.FC = () => {
       ) : (
         <div className="rounded-[26px] border border-dashed border-slate-300 bg-white p-10 text-center">
           <p className="text-sm font-semibold text-slate-700">暂无符合条件的案件</p>
-          <p className="mt-2 text-xs text-slate-500">可调整筛选，或从真实闭环页产生带 finding 的任务。</p>
+          <p className="mt-2 text-xs text-slate-500">可调整筛选，或从真实闭环页产生新的问题记录。</p>
         </div>
       )}
 
@@ -388,7 +388,7 @@ export const AlarmsPage: React.FC = () => {
             {selected.attempts.length ? (
               <section>
                 <p className="text-sm font-semibold text-slate-900">整改尝试与复验</p>
-                <div className="mt-3 space-y-3">{selected.attempts.map((attempt) => <div key={attempt.id} className="rounded-[20px] border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-slate-800">Attempt #{attempt.attempt_no}</p><span className="rounded-full bg-white px-2.5 py-1 text-[11px] text-slate-600">{attempt.resolution_decision}</span></div><p className="mt-2 text-sm text-slate-600">{attempt.action_description}</p><p className="mt-2 break-all font-mono text-[11px] text-slate-500">Attempt ID: {attempt.id}</p>{attempt.verification_job_id ? <p className="mt-1 break-all font-mono text-[11px] text-slate-500">复验任务: {attempt.verification_job_id}</p> : attempt.resolution_decision === "pending" && selected.case.status === "remediation_in_progress" ? <div className="mt-3 flex flex-col gap-2 sm:flex-row"><Link to={`/backend-workflow?caseId=${encodeURIComponent(selected.case.id)}&attemptId=${encodeURIComponent(attempt.id)}`} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-[#0d3f86] px-3 py-2 text-xs font-semibold text-white">使用原项目与基线上传复验证据</Link><button onClick={() => void navigator.clipboard.writeText(attempt.id)} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">复制 Attempt ID</button></div> : null}</div>)}</div>
+                <div className="mt-3 space-y-3">{selected.attempts.map((attempt) => <div key={attempt.id} className="rounded-[20px] border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-slate-800">整改第 {attempt.attempt_no} 次</p><span className="rounded-full bg-white px-2.5 py-1 text-[11px] text-slate-600">{attempt.resolution_decision}</span></div><p className="mt-2 text-sm text-slate-600">{attempt.action_description}</p><p className="mt-2 break-all font-mono text-[11px] text-slate-500">整改记录 ID：{attempt.id}</p>{attempt.verification_job_id ? <p className="mt-1 break-all font-mono text-[11px] text-slate-500">复验任务: {attempt.verification_job_id}</p> : attempt.resolution_decision === "pending" && selected.case.status === "remediation_in_progress" ? <div className="mt-3 flex flex-col gap-2 sm:flex-row"><Link to={`/backend-workflow?caseId=${encodeURIComponent(selected.case.id)}&attemptId=${encodeURIComponent(attempt.id)}`} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-[#0d3f86] px-3 py-2 text-xs font-semibold text-white">使用原项目与基线上传复验证据</Link><button onClick={() => void navigator.clipboard.writeText(attempt.id)} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">复制整改编号</button></div> : null}</div>)}</div>
               </section>
             ) : null}
 
