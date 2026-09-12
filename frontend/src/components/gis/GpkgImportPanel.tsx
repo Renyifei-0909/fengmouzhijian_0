@@ -273,7 +273,7 @@ export const GpkgImportPanel: React.FC<Props> = ({
   );
 
   return (
-    <section className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm" data-testid="gpkg-import-panel">
+    <section className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm" data-testid="gpkg-import-panel">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-900">{COPY.gpkgImportTitle}</h3>
         <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-900">

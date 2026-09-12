@@ -674,7 +674,7 @@ export const BackendWorkflowPage: React.FC = () => {
         </div>
       </section>
 
-      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
         <div className="grid gap-3 md:grid-cols-6">
           {workflowSteps.map((step, index) => (
             <div
@@ -694,7 +694,7 @@ export const BackendWorkflowPage: React.FC = () => {
         </div>
       </section>
 
-      <form className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm" onSubmit={(event) => event.preventDefault()}>
+      <form className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm" onSubmit={(event) => event.preventDefault()}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
           <div className="flex-1">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">本地演示鉴权</p>
@@ -877,7 +877,7 @@ export const BackendWorkflowPage: React.FC = () => {
         <div className="contents xl:flex xl:flex-col xl:gap-5">
 
           {/* 01 / 工程语义锚点 */}
-          <section className="order-1 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm xl:order-none">
+          <section className="order-1 rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm xl:order-none">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
@@ -968,7 +968,7 @@ export const BackendWorkflowPage: React.FC = () => {
 
 
           {/* 03 / 任务与结果 */}
-          <section className="order-3 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm xl:order-none">
+          <section className="order-3 rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm xl:order-none">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
@@ -1102,7 +1102,7 @@ export const BackendWorkflowPage: React.FC = () => {
 
                 {/* Worker 尝试账本 */}
                 <section
-                  className="overflow-hidden rounded-[22px] border border-slate-200 bg-white"
+                  className="overflow-hidden rounded-[22px] border border-slate-200 panel-card"
                   aria-labelledby="verification-attempt-history-title"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 bg-[#0d3f86] px-4 py-3 text-white">
@@ -1472,7 +1472,7 @@ export const BackendWorkflowPage: React.FC = () => {
         <div className="contents xl:flex xl:flex-col xl:gap-5">
 
           {/* 02 / 原始输入 */}
-          <section className="order-2 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm xl:order-none">
+          <section className="order-2 rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm xl:order-none">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
@@ -1607,7 +1607,7 @@ export const BackendWorkflowPage: React.FC = () => {
 
           {/* 04 / 可信交付 */}
           {proof && report && (
-            <section className="order-4 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm xl:order-none">
+            <section className="order-4 rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm xl:order-none">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">

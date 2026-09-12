@@ -23,7 +23,7 @@ export const SystemSettingsPage: React.FC = () => {
       {notice ? <Notice type="info" message={notice} /> : null}
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-base font-semibold text-slate-900">协同与存储策略</h3>
             <DatabaseIcon className="h-5 w-5 text-sky-600" />
@@ -84,7 +84,7 @@ export const SystemSettingsPage: React.FC = () => {
         </div>
 
         <div className="space-y-5">
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-900">系统开关</h3>
               <SettingsIcon className="h-5 w-5 text-sky-600" />
@@ -110,7 +110,7 @@ export const SystemSettingsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-900">系统检测</h3>
               <ShieldIcon className="h-5 w-5 text-sky-600" />
@@ -151,7 +151,7 @@ export const SystemSettingsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-900">系统资源</h3>
               <CpuIcon className="h-5 w-5 text-sky-600" />

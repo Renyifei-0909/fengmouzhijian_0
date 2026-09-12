@@ -165,7 +165,7 @@ export const HiddenAIPage: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-5">
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">1. 场景选择与样例采集</h3>
@@ -208,7 +208,7 @@ export const HiddenAIPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">2. AI 分析流程</h3>
@@ -265,7 +265,7 @@ export const HiddenAIPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">3. 结构化结果输出</h3>
@@ -310,7 +310,7 @@ export const HiddenAIPage: React.FC = () => {
         </div>
 
         <div className="space-y-5">
-          <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+          <div className="overflow-hidden rounded-[28px] border border-slate-200 panel-card shadow-sm">
             <div className="relative h-72 bg-cover bg-center" style={{ backgroundImage: `url(${current.cover})` }}>
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-slate-900/20 to-transparent" />
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(14,165,233,0.28),transparent_22%),radial-gradient(circle_at_60%_44%,rgba(34,211,238,0.18),transparent_18%),radial-gradient(circle_at_70%_72%,rgba(59,130,246,0.24),transparent_20%)]" />
@@ -332,7 +332,7 @@ export const HiddenAIPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-900">风险点与整改建议</h3>
               <ShieldIcon className="h-5 w-5 text-sky-600" />
@@ -353,7 +353,7 @@ export const HiddenAIPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-900">可信指纹与交付动作</h3>
               <BlockchainIcon className="h-5 w-5 text-sky-600" />

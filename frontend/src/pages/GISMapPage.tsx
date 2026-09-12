@@ -262,7 +262,7 @@ export const GISMapPage: React.FC = () => {
 
   return (
     <div className="space-y-4 page-enter">
-      <div className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-start md:justify-between">
+      <div className="flex flex-col gap-3 rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold text-slate-900">工程作业</h2>
           <p className="mt-1 text-sm leading-6 text-slate-600">{COPY.engineeringIntro}</p>
@@ -317,7 +317,7 @@ export const GISMapPage: React.FC = () => {
         </div>
       ) : null}
 
-      <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <label className="block min-w-0 flex-1">
             <span className="text-xs font-medium text-slate-500">{COPY.projectSelect}</span>
@@ -423,7 +423,7 @@ export const GISMapPage: React.FC = () => {
               onFileSelected={() => setHasSelectedGpkg(true)}
             />
           ) : null}
-          <section className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+          <section className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm">
             <div className="mb-3 flex items-center gap-2">
               <ProjectIcon className="h-4 w-4 text-sky-600" />
               <h3 className="text-sm font-semibold text-slate-900">{COPY.gpkgImportRecords}</h3>
@@ -483,7 +483,7 @@ export const GISMapPage: React.FC = () => {
             </div>
           </section>
 
-          <section className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+          <section className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm">
             <div className="mb-3 flex items-center gap-2">
               <MapIcon className="h-4 w-4 text-sky-600" />
               <h3 className="text-sm font-semibold text-slate-900">{COPY.statsObjects}</h3>
@@ -593,7 +593,7 @@ export const GISMapPage: React.FC = () => {
         </section>
 
         <aside className={cn("space-y-4", mobileTab !== "orders" && "hidden lg:block")}>
-          <section className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+          <section className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <ShieldIcon className="h-4 w-4 text-sky-600" />
@@ -654,7 +654,7 @@ export const GISMapPage: React.FC = () => {
             </div>
           </section>
 
-          <section className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+          <section className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm">
             <h3 className="text-sm font-semibold text-slate-900">{COPY.createWorkOrder}</h3>
             {!selectedObject ? (
               <p className="mt-2 text-xs text-amber-700">{COPY.selectObjectFirst}</p>
@@ -716,7 +716,7 @@ export const GISMapPage: React.FC = () => {
           </section>
 
           {selectedWorkOrder ? (
-            <section className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm">
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-slate-900">{COPY.fieldCapture}</h3>
                 <Link
@@ -761,7 +761,7 @@ export const GISMapPage: React.FC = () => {
               />
             </section>
           ) : (
-            <div className="rounded-[24px] border border-dashed border-slate-200 bg-white p-4 text-xs text-slate-500">
+            <div className="rounded-[24px] border border-dashed border-slate-200 panel-card p-4 text-xs text-slate-500">
               <InfoIcon className="mb-1 inline h-4 w-4 text-slate-400" />{" "}
               选择或创建施工工单后，可提交现场资料并查看核验结果。
             </div>

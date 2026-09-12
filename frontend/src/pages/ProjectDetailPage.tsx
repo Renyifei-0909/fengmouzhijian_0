@@ -105,8 +105,8 @@ export const ProjectDetailPage: React.FC = () => {
     }
   };
 
-  if (loading) return <div className="rounded-[28px] border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">正在加载真实项目详情…</div>;
-  if (!project) return <div className="rounded-[28px] border border-dashed border-slate-300 bg-white p-12 text-center"><p className="font-semibold text-slate-900">未找到该后端项目</p><p className="mt-2 text-sm text-slate-500">{error || "请检查项目 ID。"}</p><button onClick={() => navigate("/projects")} className="mt-4 rounded-2xl bg-sky-600 px-4 py-2 text-sm text-white">返回项目列表</button></div>;
+  if (loading) return <div className="rounded-[28px] border border-slate-200 panel-card p-12 text-center text-sm text-slate-500">正在加载真实项目详情…</div>;
+  if (!project) return <div className="rounded-[28px] border border-dashed border-slate-300 panel-card p-12 text-center"><p className="font-semibold text-slate-900">未找到该后端项目</p><p className="mt-2 text-sm text-slate-500">{error || "请检查项目 ID。"}</p><button onClick={() => navigate("/projects")} className="mt-4 rounded-2xl bg-sky-600 px-4 py-2 text-sm text-white">返回项目列表</button></div>;
 
   const tabs = [{ key: "jobs", label: `验真任务 ${jobs.length}` }, { key: "baselines", label: `设计基线 ${baselines.length}` }, { key: "reports", label: `结构化报告 ${reports.length}` }, { key: "proofs", label: `可信档案 ${proofs.length}` }] as const;
 
@@ -126,11 +126,11 @@ export const ProjectDetailPage: React.FC = () => {
         { label: "设计基线", value: baselines.length, Icon: DatabaseIcon },
         { label: "验真任务", value: jobs.length, Icon: CameraIcon },
         { label: "证据档案", value: proofs.length, Icon: BlockchainIcon },
-      ].map(({ label, value, Icon }) => <div key={label} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm"><div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-sky-50 text-sky-700"><Icon className="h-4 w-4" /></div><p className="mt-4 text-2xl font-semibold text-slate-900">{value}</p><p className="mt-1 text-xs leading-5 text-slate-500">{label}</p></div>)}</div>
+      ].map(({ label, value, Icon }) => <div key={label} className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm"><div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-sky-50 text-sky-700"><Icon className="h-4 w-4" /></div><p className="mt-4 text-2xl font-semibold text-slate-900">{value}</p><p className="mt-1 text-xs leading-5 text-slate-500">{label}</p></div>)}</div>
       {progress?.metric_note ? <div className="flex items-start gap-2 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-800"><InfoIcon className="mt-0.5 h-4 w-4 shrink-0" /><span>后端指标口径：{progress.metric_note}</span></div> : null}
     </section>
 
-    <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
       <div role="tablist" aria-label="项目详情分类" className="flex flex-wrap gap-2">{tabs.map((item) => <button key={item.key} role="tab" aria-selected={tab === item.key} onClick={() => setTab(item.key)} className={cn("rounded-full px-4 py-2 text-sm font-medium", tab === item.key ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600")}>{item.label}</button>)}</div>
       <div className="mt-5">
         {tab === "jobs" ? <div className="space-y-3">

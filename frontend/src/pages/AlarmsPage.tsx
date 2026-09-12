@@ -259,7 +259,7 @@ export const AlarmsPage: React.FC = () => {
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6" aria-label="真实案件统计">
         {summaryCards.map(([label, value, note]) => (
-          <div key={label} className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-sm">
+          <div key={label} className="rounded-[22px] border border-slate-200 panel-card p-4 shadow-sm">
             <p className="text-xs font-medium text-slate-500">{label}</p>
             <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
             <p className="mt-2 text-[11px] leading-4 text-slate-400">{note}</p>
@@ -269,7 +269,7 @@ export const AlarmsPage: React.FC = () => {
 
       {summary ? <Notice message={summary.truth_note} /> : null}
 
-      <section className="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="rounded-[26px] border border-slate-200 panel-card p-4 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <label className="flex flex-1 items-center rounded-2xl border border-slate-200 px-3 py-2.5">
             <SearchIcon className="mr-2 h-4 w-4 text-slate-400" />
@@ -298,7 +298,7 @@ export const AlarmsPage: React.FC = () => {
       </section>
 
       {loading && !cases.length ? (
-        <div className="rounded-[26px] border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">正在读取后端持久化案件…</div>
+        <div className="rounded-[26px] border border-slate-200 panel-card p-10 text-center text-sm text-slate-500">正在读取后端持久化案件…</div>
       ) : visible.length ? (
         <section className="grid gap-3 xl:grid-cols-2">
           {visible.map((item) => {
@@ -331,7 +331,7 @@ export const AlarmsPage: React.FC = () => {
           })}
         </section>
       ) : (
-        <div className="rounded-[26px] border border-dashed border-slate-300 bg-white p-10 text-center">
+        <div className="rounded-[26px] border border-dashed border-slate-300 panel-card p-10 text-center">
           <p className="text-sm font-semibold text-slate-700">暂无符合条件的案件</p>
           <p className="mt-2 text-xs text-slate-500">可调整筛选，或从真实闭环页产生新的问题记录。</p>
         </div>

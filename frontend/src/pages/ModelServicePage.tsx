@@ -74,7 +74,7 @@ export const ModelServicePage: React.FC = () => {
       {notice ? <Notice type="info" message={notice} /> : null}
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-        <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h3 className="text-base font-semibold text-slate-900">模型列表</h3>
@@ -133,7 +133,7 @@ export const ModelServicePage: React.FC = () => {
         </div>
 
         <div className="space-y-5">
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">当前模型详情</h3>
@@ -188,7 +188,7 @@ export const ModelServicePage: React.FC = () => {
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
             <h3 className="text-base font-semibold text-slate-900">服务健康度</h3>
             <div className="mt-4 grid grid-cols-3 gap-3">
               {[

@@ -48,13 +48,13 @@ export const ReportsPage: React.FC = () => {
 
     <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="text-base font-semibold text-white [text-shadow:0_1px_12px_rgba(2,8,23,0.55)]">报告清单</h3></div><button type="button" onClick={() => window.print()} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 sm:w-auto"><PrintIcon className="h-4 w-4" /> 打印当前页</button></div>
 
-    {loading ? <div className="rounded-[28px] border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">正在读取报告…</div> : null}
-    {!loading && reports.length === 0 ? <div className="rounded-[28px] border border-dashed border-slate-300 bg-white p-12 text-center"><ShieldIcon className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">暂无已封存报告</p></div> : null}
+    {loading ? <div className="rounded-[28px] border border-slate-200 panel-card p-12 text-center text-sm text-slate-500">正在读取报告…</div> : null}
+    {!loading && reports.length === 0 ? <div className="rounded-[28px] border border-dashed border-slate-300 panel-card p-12 text-center"><ShieldIcon className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">暂无已封存报告</p></div> : null}
 
     {reports.length > 0 ? <>
       <section aria-label="移动端报告清单" className="grid gap-3 md:hidden">{reports.map((report) => {
         const truth = reportTruthFromReport(report);
-        return <article key={report.id} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+        return <article key={report.id} className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold text-slate-900">服务端封存报告</p>
             <TruthBadge truth={truth} />
@@ -74,7 +74,7 @@ export const ReportsPage: React.FC = () => {
           </div>
         </article>;
       })}</section>
-      <div className="hidden overflow-x-auto rounded-[28px] border border-slate-200 bg-white shadow-sm md:block"><table className="min-w-[880px] w-full text-left text-sm"><thead><tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-600"><th className="px-4 py-3 font-medium">报告 / 摘要</th><th className="px-4 py-3 font-medium">所属项目</th><th className="px-4 py-3 font-medium">报告版本</th><th className="px-4 py-3 font-medium">生成时间</th><th className="px-4 py-3 font-medium">真实性状态</th><th className="px-4 py-3 text-right font-medium">操作</th></tr></thead><tbody className="divide-y divide-slate-100">{reports.map((report) => {
+      <div className="hidden overflow-x-auto rounded-[28px] border border-slate-200 panel-card shadow-sm md:block"><table className="min-w-[880px] w-full text-left text-sm"><thead><tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-600"><th className="px-4 py-3 font-medium">报告 / 摘要</th><th className="px-4 py-3 font-medium">所属项目</th><th className="px-4 py-3 font-medium">报告版本</th><th className="px-4 py-3 font-medium">生成时间</th><th className="px-4 py-3 font-medium">真实性状态</th><th className="px-4 py-3 text-right font-medium">操作</th></tr></thead><tbody className="divide-y divide-slate-100">{reports.map((report) => {
       const truth = reportTruthFromReport(report);
       return <tr key={report.id} className="hover:bg-slate-50"><td className="px-4 py-4"><p className="text-sm font-semibold text-slate-900">服务端封存报告</p><p className="mt-1 max-w-72 truncate font-mono text-[11px] text-slate-500">{report.sha256}</p></td><td className="px-4 py-4 text-xs text-slate-600">{projectNames[report.project_id] || report.project_id}</td><td className="px-4 py-4 text-xs text-slate-600">v{report.schema_version}</td><td className="px-4 py-4 text-xs text-slate-600">{new Date(report.created_at).toLocaleString("zh-CN")}</td><td className="px-4 py-4"><TruthBadge truth={truth} /><p className="mt-1 text-[10px] text-slate-400">{report.status}</p></td><td className="px-4 py-4"><div className="flex justify-end gap-2"><button aria-label="预览报告" onClick={() => setSelectedId(report.id)} className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 hover:text-sky-700"><EyeIcon className="h-4 w-4" /></button><button aria-label="下载 JSON 报告" onClick={() => void api.downloadReport(report.id, "json").catch((reason) => setError(reason.message))} className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-600 text-white"><DownloadIcon className="h-4 w-4" /></button></div></td></tr>;
       })}</tbody></table></div>

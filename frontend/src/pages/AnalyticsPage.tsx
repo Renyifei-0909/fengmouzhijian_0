@@ -60,7 +60,7 @@ export const AnalyticsPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md">
+        <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm transition-all hover:shadow-md">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-base font-semibold text-slate-900">告警趋势</p>
             <span className="text-sm text-slate-500">近7日</span>
@@ -76,7 +76,7 @@ export const AnalyticsPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md">
+        <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm transition-all hover:shadow-md">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-base font-semibold text-slate-900">项目进度</p>
             <span className="text-sm text-slate-500">当前周期</span>
@@ -84,7 +84,7 @@ export const AnalyticsPage: React.FC = () => {
           {bar(projectProgressData.labels, projectProgressData.datasets[0].data)}
         </div>
 
-        <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md xl:col-span-2">
+        <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm transition-all hover:shadow-md xl:col-span-2">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-base font-semibold text-slate-900">设备分布</p>
             <span className="text-sm text-slate-500">按类型</span>

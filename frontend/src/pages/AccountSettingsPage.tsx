@@ -28,7 +28,7 @@ export const AccountSettingsPage: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[0.7fr_1.3fr]">
         <div className="space-y-5">
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
             <div className="flex flex-col items-center text-center">
               <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-sky-500 to-blue-700 text-2xl font-semibold text-white">
                 张
@@ -44,7 +44,7 @@ export const AccountSettingsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-900">登录安全</h3>
               <ShieldIcon className="h-5 w-5 text-sky-600" />
@@ -69,7 +69,7 @@ export const AccountSettingsPage: React.FC = () => {
         </div>
 
         <div className="space-y-5">
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-900">基础资料</h3>
               <UserIcon className="h-5 w-5 text-sky-600" />
@@ -102,7 +102,7 @@ export const AccountSettingsPage: React.FC = () => {
             </button>
           </div>
 
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-900">通知偏好</h3>
               <BellIcon className="h-5 w-5 text-sky-600" />

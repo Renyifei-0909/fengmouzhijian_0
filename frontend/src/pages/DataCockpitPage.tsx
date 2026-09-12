@@ -49,7 +49,7 @@ export const DataCockpitPage: React.FC = () => {
       {notice ? <Notice type="info" message={notice} /> : null}
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[26px] border border-slate-200 panel-card p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-sm text-slate-500">在建项目</span>
             <AnalyticsIcon className="h-5 w-5 text-sky-600" />
@@ -57,7 +57,7 @@ export const DataCockpitPage: React.FC = () => {
           <p className="mt-4 text-3xl font-semibold text-slate-900">{dashboardStats.activeProjects}</p>
           <p className="mt-2 text-xs text-emerald-600">较昨日 +2 个</p>
         </div>
-        <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[26px] border border-slate-200 panel-card p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-sm text-slate-500">在线设备</span>
             <DeviceIcon className="h-5 w-5 text-sky-600" />
@@ -65,7 +65,7 @@ export const DataCockpitPage: React.FC = () => {
           <p className="mt-4 text-3xl font-semibold text-slate-900">{dashboardStats.onlineDevices}</p>
           <p className="mt-2 text-xs text-emerald-600">在线率 91.0%</p>
         </div>
-        <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[26px] border border-slate-200 panel-card p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-sm text-slate-500">今日告警</span>
             <BellIcon className="h-5 w-5 text-sky-600" />
@@ -73,7 +73,7 @@ export const DataCockpitPage: React.FC = () => {
           <p className="mt-4 text-3xl font-semibold text-slate-900">{dashboardStats.todayAlarms}</p>
           <p className="mt-2 text-xs text-rose-500">严重告警 {dashboardStats.criticalAlarms} 条</p>
         </div>
-        <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[26px] border border-slate-200 panel-card p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-sm text-slate-500">平均完成率</span>
             <DatabaseIcon className="h-5 w-5 text-sky-600" />
@@ -84,7 +84,7 @@ export const DataCockpitPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h3 className="text-base font-semibold text-slate-900">综合运行指数</h3>
@@ -121,7 +121,7 @@ export const DataCockpitPage: React.FC = () => {
         </div>
 
         <div className="space-y-5">
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
             <h3 className="text-base font-semibold text-slate-900">设备接入分布</h3>
             <div className="mt-4 space-y-3">
               {deviceTypeDistribution.labels.map((label, index) => (
@@ -141,7 +141,7 @@ export const DataCockpitPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
             <h3 className="text-base font-semibold text-slate-900">告警结构占比</h3>
             <div className="mt-4 space-y-3">
               {weeklyAlarmTrend.datasets.map((dataset) => {

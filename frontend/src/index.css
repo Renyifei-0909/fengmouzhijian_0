@@ -62,6 +62,16 @@ body {
 }
 
 /*
+ * 内容卡片：淡蓝底 + 轻微透明 + 背景模糊。
+ * 92% 不透明度保证深色文字对比度（等效底色 ≈ #eaf3fe，slate-900 对比度 > 11:1）。
+ */
+.panel-card {
+  background-color: rgba(238, 246, 255, 0.92);
+  backdrop-filter: blur(12px) saturate(1.08);
+  -webkit-backdrop-filter: blur(12px) saturate(1.08);
+}
+
+/*
  * 侧边导航背景：高清原图 + 分段蒙板（顶部/底部略深保证品牌区与身份卡可读，
  * 中段尽量露出原图建筑），配合文字投影保证导航文字清晰。
  */

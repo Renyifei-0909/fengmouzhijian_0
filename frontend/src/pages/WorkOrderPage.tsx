@@ -36,7 +36,7 @@ export const WorkOrderPage: React.FC = () => {
 
   if (loading && !workOrder) {
     return (
-      <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-sm text-slate-600">
+      <div className="rounded-[28px] border border-slate-200 panel-card p-8 text-sm text-slate-600">
         正在加载工单…
       </div>
     );
@@ -86,7 +86,7 @@ export const WorkOrderPage: React.FC = () => {
           {error}
         </div>
       ) : null}
-      <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
         <WorkOrderCapturePanel workOrder={workOrder} onWorkOrderUpdated={setWorkOrder} />
       </div>
       <Link to="/backend-workflow" className="inline-flex text-sm font-medium text-sky-700 hover:underline">
