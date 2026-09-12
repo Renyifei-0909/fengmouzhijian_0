@@ -127,7 +127,7 @@ export const ProjectDetailPage: React.FC = () => {
         { label: "验真任务", value: jobs.length, Icon: CameraIcon },
         { label: "证据档案", value: proofs.length, Icon: BlockchainIcon },
       ].map(({ label, value, Icon }) => <div key={label} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm"><div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-sky-50 text-sky-700"><Icon className="h-4 w-4" /></div><p className="mt-4 text-2xl font-semibold text-slate-900">{value}</p><p className="mt-1 text-xs leading-5 text-slate-500">{label}</p></div>)}</div>
-      {progress?.metric_note ? <div className="flex items-start gap-2 rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-3 text-xs leading-5 text-sky-800"><InfoIcon className="mt-0.5 h-4 w-4 shrink-0" /><span>后端指标口径：{progress.metric_note}</span></div> : null}
+      {progress?.metric_note ? <div className="flex items-start gap-2 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-800"><InfoIcon className="mt-0.5 h-4 w-4 shrink-0" /><span>后端指标口径：{progress.metric_note}</span></div> : null}
     </section>
 
     <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">

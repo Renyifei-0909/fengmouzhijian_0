@@ -38,22 +38,15 @@ body {
 }
 
 /*
- * 主内容区背景：使用高清原图（1672×941）+ 轻量蓝色蒙板。
- * cover 自适应任意分辨率与窗口尺寸；背景图案轻微可见，同时保证文字对比度。
+ * 主内容区背景：高清原图（1672×941，无滤镜原版）。
+ * cover 自适应任意分辨率与窗口尺寸，滚动时背景固定。
  */
 .app-shell-bg {
-  background-image:
-    linear-gradient(
-      180deg,
-      rgba(213, 231, 252, 0.78) 0%,
-      rgba(221, 237, 253, 0.82) 42%,
-      rgba(216, 234, 252, 0.84) 100%
-    ),
-    url("/brand/app-bg.jpg");
-  background-size: cover, cover;
-  background-position: center top, center top;
-  background-repeat: no-repeat, no-repeat;
-  background-attachment: fixed, fixed;
+  background-image: url("/brand/app-bg.png");
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
 }
 
 /*
@@ -67,15 +60,17 @@ body {
 }
 
 /*
- * 侧边导航背景：高清原图 + 深蓝蒙板，保证浅色导航文字与图标可读。
+ * 侧边导航背景：高清原图 + 分段蒙板（顶部/底部略深保证品牌区与身份卡可读，
+ * 中段尽量露出原图建筑），配合文字投影保证导航文字清晰。
  */
 .sidebar-bg {
   background-image:
     linear-gradient(
       180deg,
-      rgba(6, 14, 28, 0.76) 0%,
-      rgba(8, 18, 36, 0.82) 45%,
-      rgba(6, 15, 30, 0.88) 100%
+      rgba(6, 14, 28, 0.72) 0%,
+      rgba(6, 14, 28, 0.4) 26%,
+      rgba(6, 14, 28, 0.36) 58%,
+      rgba(5, 12, 24, 0.62) 100%
     ),
     url("/brand/sidebar-bg.jpg");
   background-size: cover, cover;

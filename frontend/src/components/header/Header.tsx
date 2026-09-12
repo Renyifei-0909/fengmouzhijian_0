@@ -39,12 +39,22 @@ export const Header: React.FC<{ title?: string; subtitle?: string }> = ({ title,
               <img src="/brand/app-logo-icon.png" alt="" className="h-full w-full object-cover" draggable={false} />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-xl font-semibold tracking-tight text-slate-900">
+              <h1
+                className={cn(
+                  "truncate text-xl font-semibold tracking-tight",
+                  scrolled ? "text-slate-900" : "text-white [text-shadow:0_1px_14px_rgba(2,8,23,0.65)]",
+                )}
+              >
                 {title || PRODUCT.defaultPageTitle}
               </h1>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+              <div
+                className={cn(
+                  "mt-1 flex flex-wrap items-center gap-2 text-sm",
+                  scrolled ? "text-slate-500" : "text-sky-100/90 [text-shadow:0_1px_10px_rgba(2,8,23,0.55)]",
+                )}
+              >
                 {subtitle ? <span>{subtitle}</span> : null}
-                <span className="hidden h-1 w-1 rounded-full bg-slate-300 md:inline-flex" />
+                <span className={cn("hidden h-1 w-1 rounded-full md:inline-flex", scrolled ? "bg-slate-300" : "bg-white/50")} />
                 <span>当前时间 {nowText}</span>
               </div>
             </div>

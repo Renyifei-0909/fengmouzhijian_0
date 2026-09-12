@@ -75,17 +75,17 @@ export const TraceabilityPage: React.FC = () => {
         </div>
 
         {integrity ? (
-          <div className={cn("rounded-[28px] border p-5", integrity.valid ? "border-success-light bg-success-light/60" : "border-danger-light bg-danger-light/60")}>
+          <div className={cn("rounded-[28px] border p-5", integrity.valid ? "border-success-light bg-success-light" : "border-danger-light bg-danger-light")}>
             <h3 className={cn("font-semibold", integrity.valid ? "text-success" : "text-danger")}>逐项核验结果</h3>
             <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {Object.entries(integrity.checks).map(([key, valid]) => (
-                <div key={key} className={cn("rounded-2xl bg-white/80 px-3 py-2 text-xs", valid ? "text-slate-700" : "text-danger font-semibold")}>
+                <div key={key} className={cn("rounded-2xl bg-white px-3 py-2 text-xs", valid ? "text-slate-700" : "text-danger font-semibold")}>
                   {valid ? "✓" : "✗"} {key}
                 </div>
               ))}
             </div>
             {!integrity.valid && integrity.errors.length > 0 && (
-              <div className="mt-3 rounded-xl border border-danger-light bg-white/50 p-3">
+              <div className="mt-3 rounded-xl border border-danger-light bg-white p-3">
                 <p className="text-xs font-semibold text-danger">失败详情：</p>
                 <ul className="mt-2 list-disc pl-5 text-xs text-danger">
                   {integrity.errors.map((err, i) => <li key={i}>{err}</li>)}

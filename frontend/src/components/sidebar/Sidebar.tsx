@@ -72,7 +72,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, width, onToggle, on
     <aside
       style={{ width: effectiveWidth }}
       className={cn(
-        "sidebar-bg fixed left-0 top-0 z-40 hidden h-screen flex-col border-r border-sky-100/15 text-white shadow-[0_20px_60px_-24px_rgba(2,8,23,0.75)] lg:flex",
+        "sidebar-bg fixed left-0 top-0 z-40 hidden h-screen flex-col border-r border-sky-100/15 text-white shadow-[0_20px_60px_-24px_rgba(2,8,23,0.75)] [text-shadow:0_1px_10px_rgba(2,8,23,0.45)] lg:flex",
         !dragging && "transition-[width] duration-200 ease-out",
       )}
     >

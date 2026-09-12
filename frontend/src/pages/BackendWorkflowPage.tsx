@@ -924,7 +924,7 @@ export const BackendWorkflowPage: React.FC = () => {
                 </p>
 
                 {remediationCaseDetail && remediationAttempt ? (
-                  <div className="rounded-[18px] border border-violet-200 bg-white/80 p-3 text-violet-900">
+                  <div className="rounded-[18px] border border-violet-200 bg-white p-3 text-violet-900">
                     <p className="text-xs font-semibold">
                       {remediationCaseDetail.case.finding_code} · Attempt #{remediationAttempt.attempt_no}
                     </p>
@@ -1216,7 +1216,7 @@ export const BackendWorkflowPage: React.FC = () => {
                             </div>
 
                             {outcome?.result_sha256 ? (
-                              <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+                              <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
                                 <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-700">
                                   Result SHA-256
                                 </p>
@@ -1228,7 +1228,7 @@ export const BackendWorkflowPage: React.FC = () => {
                             ) : null}
 
                             {outcome?.error_code ? (
-                              <div className="mt-3 rounded-xl border border-rose-100 bg-rose-50/70 px-3 py-2 text-[11px] text-rose-800">
+                              <div className="mt-3 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-[11px] text-rose-800">
                                 <p className="font-mono font-semibold">
                                   {outcome.error_code} ·{" "}
                                   {outcome.error_retryable ? "可重试" : "不可重试"}
@@ -1487,7 +1487,7 @@ export const BackendWorkflowPage: React.FC = () => {
               <CameraIcon className="h-6 w-6 text-sky-600" />
             </div>
 
-            <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-[24px] border border-dashed border-sky-300 bg-sky-50/70 px-5 py-8 text-center hover:bg-sky-50">
+            <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-[24px] border border-dashed border-sky-300 bg-sky-50 px-5 py-8 text-center hover:bg-sky-100">
               <CameraIcon className="h-8 w-8 text-sky-500" />
 
               <span className="mt-3 text-sm font-semibold text-slate-800">
@@ -1757,7 +1757,7 @@ export const BackendWorkflowPage: React.FC = () => {
                     {Object.entries(integrity.checks).map(([key, valid]) => (
                       <div
                         key={key}
-                        className="rounded-xl bg-white/70 px-3 py-2 text-[11px] text-slate-600"
+                        className="rounded-xl bg-white px-3 py-2 text-[11px] text-slate-600"
                       >
                         {valid ? "✓" : "×"} {key}
                       </div>

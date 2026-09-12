@@ -64,7 +64,7 @@ export const ReportsPage: React.FC = () => {
             <p className="mt-2 max-h-14 overflow-hidden text-xs leading-5 text-slate-600">{reportSummary(report)}</p>
           </div>
           <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
-            <div className="col-span-2 rounded-2xl bg-sky-50/70 px-3 py-2.5"><dt className="text-[10px] text-slate-400">所属项目</dt><dd className="mt-1 break-words font-medium text-slate-700">{projectNames[report.project_id] || report.project_id}</dd></div>
+            <div className="col-span-2 rounded-2xl bg-sky-50 px-3 py-2.5"><dt className="text-[10px] text-slate-400">所属项目</dt><dd className="mt-1 break-words font-medium text-slate-700">{projectNames[report.project_id] || report.project_id}</dd></div>
             <div className="rounded-2xl bg-slate-50 px-3 py-2.5"><dt className="text-[10px] text-slate-400">生成时间</dt><dd className="mt-1 leading-5 text-slate-700">{new Date(report.created_at).toLocaleString("zh-CN")}</dd></div>
             <div className="rounded-2xl bg-slate-50 px-3 py-2.5"><dt className="text-[10px] text-slate-400">报告版本</dt><dd className="mt-1 font-medium text-slate-700">v{report.schema_version}</dd></div>
           </dl>
