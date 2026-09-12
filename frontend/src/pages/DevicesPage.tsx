@@ -39,8 +39,8 @@ export const DevicesPage: React.FC = () => {
       {notice ? <Notice type="info" message={notice} /> : null}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">设备监控（原型）</h2>
-          <p className="mt-1 text-sm text-slate-500">设备接入与运行状态演示</p>
+          <h2 className="text-base font-semibold text-white [text-shadow:0_1px_12px_rgba(2,8,23,0.55)]">设备监控（原型）</h2>
+          <p className="mt-1 text-sm text-sky-100/80 [text-shadow:0_1px_10px_rgba(2,8,23,0.5)]">设备接入与运行状态演示</p>
         </div>
         <div className="flex items-center gap-2">
           <button

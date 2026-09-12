@@ -106,7 +106,7 @@ export const ProjectsPage: React.FC = () => {
       </section>
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div><h3 className="text-base font-semibold text-slate-900">项目列表</h3><p className="mt-1 text-sm text-slate-500">已批准基线覆盖率为代理指标，不等同于施工总进度。</p></div>
+        <div><h3 className="text-base font-semibold text-white [text-shadow:0_1px_12px_rgba(2,8,23,0.55)]">项目列表</h3><p className="mt-1 text-sm text-sky-100/80 [text-shadow:0_1px_10px_rgba(2,8,23,0.5)]">已批准基线覆盖率为代理指标，不等同于施工总进度。</p></div>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowFilter((value) => !value)} className={cn("inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium", showFilter ? "border-sky-200 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-700")}><FilterIcon className="h-4 w-4" /> 筛选</button>
           <button onClick={() => setCreateOpen(true)} className="inline-flex items-center gap-2 rounded-2xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700"><CameraIcon className="h-4 w-4" /> 新建真实项目</button>

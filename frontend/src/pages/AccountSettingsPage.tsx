@@ -20,7 +20,7 @@ export const AccountSettingsPage: React.FC = () => {
         message="原型展示页 · 信息仅保存在当前浏览器。"
       />
       <div className="rounded-[28px] border border-sky-100 bg-gradient-to-r from-sky-700 via-blue-700 to-cyan-700 p-6 text-white shadow-[0_20px_80px_-32px_rgba(14,116,255,0.8)]">
-        <h2 className="text-2xl font-semibold">账户设置（原型）</h2>
+        <h2 className="text-2xl font-semibold text-white [text-shadow:0_1px_12px_rgba(2,8,23,0.55)]">账户设置（原型）</h2>
         <p className="mt-2 text-sm text-sky-100">演示资料与通知偏好布局；不会写入后端用户库。</p>
       </div>
 

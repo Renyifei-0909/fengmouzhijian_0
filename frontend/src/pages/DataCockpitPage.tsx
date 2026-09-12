@@ -30,7 +30,7 @@ export const DataCockpitPage: React.FC = () => {
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium backdrop-blur-sm">
               <DatabaseIcon className="h-4 w-4" /> 数据看板 · 静态原型
             </div>
-            <h2 className="text-2xl font-semibold">施工监管数据驾驶舱（演示布局）</h2>
+            <h2 className="text-2xl font-semibold text-white [text-shadow:0_1px_12px_rgba(2,8,23,0.55)]">施工监管数据驾驶舱（演示布局）</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-sky-100">
               仅展示 UI 布局。真实项目/任务/告警统计请使用总览、项目、告警与真实闭环页的后端数据。
             </p>

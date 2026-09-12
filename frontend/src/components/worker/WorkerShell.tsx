@@ -41,7 +41,7 @@ const WorkerShellInner: React.FC<React.PropsWithChildren> = ({ children }) => {
         <div className="border-b border-white/10 px-5 py-5">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl ring-1 ring-white/15">
-              <img src="/brand/app-logo-icon.png" alt="烽眸智鉴" className="h-full w-full object-cover" draggable={false} />
+              <img src="/brand/app-logo-mark.png" alt="烽眸智鉴" className="h-full w-full object-cover" draggable={false} />
             </div>
             <div>
               <p className="text-sm font-semibold">烽眸智鉴</p>

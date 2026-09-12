@@ -36,7 +36,7 @@ export const Header: React.FC<{ title?: string; subtitle?: string }> = ({ title,
         <div className="min-w-0">
           <div className="flex items-center gap-3">
             <div className="hidden h-10 w-10 items-center justify-center overflow-hidden rounded-2xl shadow-lg shadow-sky-100 ring-1 ring-sky-200/70 lg:flex">
-              <img src="/brand/app-logo-icon.png" alt="" className="h-full w-full object-cover" draggable={false} />
+              <img src="/brand/app-logo-mark.png" alt="" className="h-full w-full object-cover" draggable={false} />
             </div>
             <div className="min-w-0">
               <h1

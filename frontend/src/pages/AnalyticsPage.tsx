@@ -46,8 +46,8 @@ export const AnalyticsPage: React.FC = () => {
       {notice ? <Notice type="info" message={notice} /> : null}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">数据分析（原型）</h2>
-          <p className="mt-1 text-sm text-slate-500">布局演示；运营统计请用总览/告警/真实闭环页的 API 数据</p>
+          <h2 className="text-base font-semibold text-white [text-shadow:0_1px_12px_rgba(2,8,23,0.55)]">数据分析（原型）</h2>
+          <p className="mt-1 text-sm text-sky-100/80 [text-shadow:0_1px_10px_rgba(2,8,23,0.5)]">布局演示；运营统计请用总览/告警/真实闭环页的 API 数据</p>
         </div>
         <button
           onClick={() =>

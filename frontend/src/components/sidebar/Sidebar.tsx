@@ -95,7 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, width, onToggle, on
         <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
           <div className="h-11 w-11 shrink-0 overflow-hidden rounded-2xl shadow-lg shadow-primary-900/40 ring-1 ring-sky-300/30">
             <img
-              src="/brand/app-logo-icon.png"
+              src="/brand/app-logo-mark.png"
               alt="烽眸智鉴"
               className="h-full w-full object-cover"
               draggable={false}

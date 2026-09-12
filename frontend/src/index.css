@@ -38,15 +38,17 @@ body {
 }
 
 /*
- * 主内容区背景：高清原图（1672×941，无滤镜原版）。
+ * 主内容区背景：高清原图 + 轻微暗色蒙板（保证背景文字为白字时对比度稳定）。
  * cover 自适应任意分辨率与窗口尺寸，滚动时背景固定。
  */
 .app-shell-bg {
-  background-image: url("/brand/app-bg.png");
-  background-size: cover;
-  background-position: center top;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
+  background-image:
+    linear-gradient(180deg, rgba(7, 18, 38, 0.36) 0%, rgba(7, 18, 38, 0.46) 100%),
+    url("/brand/app-bg.png");
+  background-size: cover, cover;
+  background-position: center top, center top;
+  background-repeat: no-repeat, no-repeat;
+  background-attachment: fixed, fixed;
 }
 
 /*

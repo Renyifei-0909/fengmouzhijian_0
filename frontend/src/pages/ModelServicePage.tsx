@@ -55,7 +55,7 @@ export const ModelServicePage: React.FC = () => {
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium backdrop-blur-sm">
               <CpuIcon className="h-4 w-4" /> 模型服务 · 静态原型
             </div>
-            <h2 className="text-2xl font-semibold">端边云模型编排面板（演示）</h2>
+            <h2 className="text-2xl font-semibold text-white [text-shadow:0_1px_12px_rgba(2,8,23,0.55)]">端边云模型编排面板（演示）</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-sky-100">
               仅展示编排 UI。准确率、吞吐、时延、显存与边缘下发均未接入真实服务。
             </p>
