@@ -37,6 +37,49 @@ body {
   background-attachment: fixed;
 }
 
+/*
+ * 主内容区背景：使用高清原图（1672×941）+ 浅色蒙板。
+ * cover 自适应任意分辨率与窗口尺寸；蒙板保证卡片与文字对比度。
+ */
+.app-shell-bg {
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(248, 251, 255, 0.88) 0%,
+      rgba(240, 246, 253, 0.9) 42%,
+      rgba(244, 249, 255, 0.9) 100%
+    ),
+    url("/brand/app-bg.jpg");
+  background-size: cover, cover;
+  background-position: center top, center top;
+  background-repeat: no-repeat, no-repeat;
+  background-attachment: fixed, fixed;
+}
+
+/*
+ * 侧边导航背景：高清原图 + 深蓝蒙板，保证浅色导航文字与图标可读。
+ */
+.sidebar-bg {
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(6, 14, 28, 0.76) 0%,
+      rgba(8, 18, 36, 0.82) 45%,
+      rgba(6, 15, 30, 0.88) 100%
+    ),
+    url("/brand/sidebar-bg.jpg");
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+}
+
+@media (max-width: 1023px) {
+  .app-shell-bg,
+  .sidebar-bg {
+    background-attachment: scroll, scroll;
+  }
+}
+
 button,
 a,
 input,

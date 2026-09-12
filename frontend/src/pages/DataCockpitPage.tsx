@@ -22,7 +22,7 @@ export const DataCockpitPage: React.FC = () => {
     <div className="space-y-5 page-enter">
       <Notice
         type="warning"
-        message="原型页 · 驾驶舱数字来自本地 mock，不是后端汇总 API。禁止当作项目进度、告警量或 85%/90% 指标。"
+        message="原型展示页 · 看板数据来自本地示例。"
       />
       <div className="rounded-[28px] border border-sky-100 bg-gradient-to-r from-sky-700 via-blue-700 to-cyan-700 p-6 text-white shadow-[0_20px_80px_-32px_rgba(14,116,255,0.8)]">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">

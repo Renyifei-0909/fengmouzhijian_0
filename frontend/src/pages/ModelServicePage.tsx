@@ -47,7 +47,7 @@ export const ModelServicePage: React.FC = () => {
     <div className="space-y-5 page-enter">
       <Notice
         type="warning"
-        message="原型页 · 列表与启停仅为前端状态。准确率/时延未评测，不连接真实模型、GPU 或评测 worker。正式推理请走远程 analyzer 合同或后续真实 baseline。"
+        message="原型展示页 · 模型列表与启停为界面演示。"
       />
       <div className="rounded-[28px] border border-sky-100 bg-gradient-to-r from-sky-700 via-blue-700 to-cyan-700 p-6 text-white shadow-[0_20px_80px_-32px_rgba(14,116,255,0.8)]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">

@@ -95,18 +95,18 @@ export const ProjectsPage: React.FC = () => {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100"><DatabaseIcon className="h-4 w-4" /> 后端实时项目库</div>
             <h2 className="mt-4 text-2xl font-semibold">工程语义与交付进度总账</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">以下项目、基线数量和已批准基线覆盖率均来自当前 SQLite 持久化数据，不再使用静态项目卡片；覆盖率仅为代理指标。</p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">项目、基线与复核进度实时汇总，基线覆盖率仅为代理指标。</p>
           </div>
           <div className="grid grid-cols-3 gap-2 rounded-3xl border border-white/10 bg-white/5 p-3">
-            <div className="rounded-2xl bg-slate-950/30 px-4 py-3"><p className="text-[10px] tracking-[.18em] text-sky-300">PROJECTS</p><p className="mt-1 text-xl font-semibold">{projects.length}</p></div>
-            <div className="rounded-2xl bg-slate-950/30 px-4 py-3"><p className="text-[10px] tracking-[.18em] text-sky-300">BASELINES</p><p className="mt-1 text-xl font-semibold">{Object.values(progress).reduce((sum, item) => sum + item.baseline_count, 0)}</p></div>
-            <div className="rounded-2xl bg-slate-950/30 px-4 py-3"><p className="text-[10px] tracking-[.18em] text-sky-300">REVIEW</p><p className="mt-1 text-xl font-semibold">{Object.values(progress).reduce((sum, item) => sum + item.pending_review_count, 0)}</p></div>
+            <div className="rounded-2xl bg-slate-950/30 px-4 py-3"><p className="text-[11px] tracking-[.08em] text-sky-300">项目总数</p><p className="mt-1 text-xl font-semibold">{projects.length}</p></div>
+            <div className="rounded-2xl bg-slate-950/30 px-4 py-3"><p className="text-[11px] tracking-[.08em] text-sky-300">设计基线</p><p className="mt-1 text-xl font-semibold">{Object.values(progress).reduce((sum, item) => sum + item.baseline_count, 0)}</p></div>
+            <div className="rounded-2xl bg-slate-950/30 px-4 py-3"><p className="text-[11px] tracking-[.08em] text-sky-300">待复核</p><p className="mt-1 text-xl font-semibold">{Object.values(progress).reduce((sum, item) => sum + item.pending_review_count, 0)}</p></div>
           </div>
         </div>
       </section>
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div><h3 className="text-base font-semibold text-slate-900">项目列表</h3><p className="mt-1 text-sm text-slate-500">已批准基线覆盖率是后端代理指标，不等同于施工总进度。</p></div>
+        <div><h3 className="text-base font-semibold text-slate-900">项目列表</h3><p className="mt-1 text-sm text-slate-500">已批准基线覆盖率为代理指标，不等同于施工总进度。</p></div>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowFilter((value) => !value)} className={cn("inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium", showFilter ? "border-sky-200 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-700")}><FilterIcon className="h-4 w-4" /> 筛选</button>
           <button onClick={() => setCreateOpen(true)} className="inline-flex items-center gap-2 rounded-2xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700"><CameraIcon className="h-4 w-4" /> 新建真实项目</button>

@@ -71,7 +71,7 @@ const sceneConfig: Record<SceneKey, { title: string; location: string; cover: st
   cable: {
     title: "线缆预埋与覆土验真",
     location: "南京江宁段 · 预埋点 C-03",
-    cover: "https://images.unsplash.com/photo-1581092335871-3c3be3cd5f4d?auto=format&fit=crop&w=1200&q=80",
+    cover: "https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=1200&q=80",
     result: {
       score: 68,
       status: "fail",
@@ -130,7 +130,7 @@ export const HiddenAIPage: React.FC = () => {
     <div className="space-y-5 page-enter">
       <Notice
         type="warning"
-        message="原型页 · 本页全部分数/置信度/量测/短指纹为本地写死示意。不会调用后端、不产生证据包，不能当作 85%/90% 指标或模型能力。真实链路请用「真实闭环联调」。"
+        message="原型展示页 · 数据为界面演示示例。"
       />
       <div className="rounded-[28px] border border-sky-100 bg-gradient-to-br from-sky-600 via-blue-700 to-cyan-700 p-6 text-white shadow-[0_20px_80px_-32px_rgba(14,116,255,0.8)]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">

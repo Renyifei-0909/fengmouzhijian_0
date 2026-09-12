@@ -236,7 +236,7 @@ export const AlarmsPage: React.FC = () => {
       {notice ? <Notice type="success" message={notice} /> : null}
       {error ? (
         <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {error}。页面不会回退显示旧 mock 告警。
+          {error}。
         </div>
       ) : null}
 
@@ -333,7 +333,7 @@ export const AlarmsPage: React.FC = () => {
       ) : (
         <div className="rounded-[26px] border border-dashed border-slate-300 bg-white p-10 text-center">
           <p className="text-sm font-semibold text-slate-700">没有符合条件的持久化案件</p>
-          <p className="mt-2 text-xs text-slate-500">这不是 mock 回退；可调整筛选，或从真实闭环页产生带 finding 的任务。</p>
+          <p className="mt-2 text-xs text-slate-500">可调整筛选，或从真实闭环页产生带 finding 的任务。</p>
         </div>
       )}
 

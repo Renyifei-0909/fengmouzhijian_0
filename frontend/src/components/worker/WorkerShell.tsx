@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ClipboardList, CloudOff, HardHat, UserRound, Wifi, Wrench } from "lucide-react";
+import { ClipboardList, CloudOff, UserRound, Wifi, Wrench } from "lucide-react";
 import { NavLink, useLocation } from "react-router";
 import { WorkerIdentityProvider, useWorkerIdentity } from "../../lib/workerIdentity";
 import { cn } from "../../utils/cn";
@@ -40,8 +40,8 @@ const WorkerShellInner: React.FC<React.PropsWithChildren> = ({ children }) => {
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-slate-800 bg-[#101820] text-white lg:flex lg:flex-col">
         <div className="border-b border-white/10 px-5 py-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#f2c94c] text-slate-950">
-              <HardHat className="h-5 w-5" aria-hidden="true" />
+            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl ring-1 ring-white/15">
+              <img src="/brand/app-logo-icon.png" alt="烽眸智鉴" className="h-full w-full object-cover" draggable={false} />
             </div>
             <div>
               <p className="text-sm font-semibold">烽眸智鉴</p>

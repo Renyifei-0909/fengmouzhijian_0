@@ -13,7 +13,7 @@ export const SystemSettingsPage: React.FC = () => {
     <div className="space-y-5 page-enter">
       <Notice
         type="warning"
-        message="原型页 · 开关与策略仅影响本页 UI。不会修改后端配置、数据库保留策略、审计导出或“上链”。哈希链是本地完整性校验，不是区块链。"
+        message="原型展示页 · 设置项仅在本页生效。"
       />
       <div className="rounded-[28px] border border-sky-100 bg-gradient-to-r from-sky-700 via-blue-700 to-cyan-700 p-6 text-white shadow-[0_20px_80px_-32px_rgba(14,116,255,0.8)]">
         <h2 className="text-2xl font-semibold">系统设置（原型）</h2>
@@ -56,10 +56,10 @@ export const SystemSettingsPage: React.FC = () => {
                 onChange={(event) => setLogLevel(event.target.value)}
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none focus:border-sky-300 focus:bg-white"
               >
-                <option>DEBUG</option>
-                <option>INFO</option>
-                <option>WARN</option>
-                <option>ERROR</option>
+                <option value="DEBUG">调试</option>
+                <option value="INFO">信息</option>
+                <option value="WARN">警告</option>
+                <option value="ERROR">错误</option>
               </select>
             </label>
             <div className="grid gap-3 sm:grid-cols-2">

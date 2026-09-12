@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { cn } from "../../utils/cn";
-import { SearchIcon, BellIcon, ChevronDownIcon, CloseIcon, ShieldIcon } from "../Icons";
-import { COPY, PRODUCT } from "../../lib/productCopy";
+import { SearchIcon, BellIcon, CloseIcon } from "../Icons";
+import { PRODUCT } from "../../lib/productCopy";
 
 export const Header: React.FC<{ title?: string; subtitle?: string }> = ({ title, subtitle }) => {
   const [searchOpen, setSearchOpen] = useState(false);
@@ -35,8 +35,8 @@ export const Header: React.FC<{ title?: string; subtitle?: string }> = ({ title,
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
-            <div className="hidden h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-700 text-white shadow-lg shadow-sky-100 lg:flex">
-              <ShieldIcon className="h-5 w-5" />
+            <div className="hidden h-10 w-10 items-center justify-center overflow-hidden rounded-2xl shadow-lg shadow-sky-100 ring-1 ring-sky-200/70 lg:flex">
+              <img src="/brand/app-logo-icon.png" alt="" className="h-full w-full object-cover" draggable={false} />
             </div>
             <div className="min-w-0">
               <h1 className="truncate text-xl font-semibold tracking-tight text-slate-900">
@@ -99,17 +99,6 @@ export const Header: React.FC<{ title?: string; subtitle?: string }> = ({ title,
                 </p>
               </div>
             ) : null}
-          </div>
-
-          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-700 text-sm font-semibold text-white">
-              管
-            </div>
-            <div className="hidden text-left md:block">
-              <p className="text-sm font-semibold text-slate-900">{COPY.identityRole}</p>
-              <p className="text-xs text-slate-500">{COPY.identityOrg}</p>
-            </div>
-            <ChevronDownIcon className="hidden h-4 w-4 text-slate-400 md:block" />
           </div>
         </div>
       </div>

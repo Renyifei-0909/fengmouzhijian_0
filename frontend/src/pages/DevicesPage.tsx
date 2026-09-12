@@ -34,7 +34,7 @@ export const DevicesPage: React.FC = () => {
     <div className="space-y-4 page-enter">
       <Notice
         type="warning"
-        message="原型页 · 设备列表为本地静态 mock，不是实时物联网接入。批量诊断/导出不会调用后端或产生真实运维记录。"
+        message="原型展示页 · 设备列表来自本地示例。"
       />
       {notice ? <Notice type="info" message={notice} /> : null}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

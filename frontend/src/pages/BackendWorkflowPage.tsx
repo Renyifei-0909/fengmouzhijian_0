@@ -727,7 +727,7 @@ export const BackendWorkflowPage: React.FC = () => {
                 <AnalyticsIcon className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-300">Worker operations</p>
+                <p className="text-[10px] font-semibold tracking-[0.24em] text-cyan-300">调度运维</p>
                 <h3 id="verification-operations-title" className="mt-1 text-lg font-semibold tracking-tight">调度健康 · 数据库时点快照</h3>
                 <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-400">
                   聚合排队、租约、死信与近期 fencing 信号；业务积压只标记“需要关注”，完整性矛盾才是事故。
@@ -1177,7 +1177,7 @@ export const BackendWorkflowPage: React.FC = () => {
 
                             <div className="mt-3 grid gap-2 text-[11px] text-slate-600 sm:grid-cols-2">
                               <p>
-                                <span className="text-slate-400">Worker ref</span>
+                                <span className="text-slate-400">执行器编号</span>
                                 <span
                                   className="ml-2 font-mono"
                                   title={attempt.worker_ref}
@@ -1671,7 +1671,7 @@ export const BackendWorkflowPage: React.FC = () => {
                 </div>
 
                 <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
-                  <p className="text-xs text-slate-400">Merkle Root</p>
+                  <p className="text-xs text-slate-400">Merkle 根哈希</p>
                   <p className="mt-2 break-all font-mono text-[11px] text-slate-700">
                     {proof.merkle_root}
                   </p>

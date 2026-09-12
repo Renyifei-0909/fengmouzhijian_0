@@ -1,5 +1,12 @@
+import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router";
-import { Sidebar } from "./components/sidebar/Sidebar";
+import {
+  Sidebar,
+  SIDEBAR_COLLAPSED_WIDTH,
+  SIDEBAR_DEFAULT_WIDTH,
+  SIDEBAR_MAX_WIDTH,
+  SIDEBAR_MIN_WIDTH,
+} from "./components/sidebar/Sidebar";
 import { Header } from "./components/header/Header";
 import { WorkerShell } from "./components/worker/WorkerShell";
 import { cn } from "./utils/cn";
@@ -96,6 +103,38 @@ const NotOpenPage: React.FC<{ title: string }> = ({ title }) => (
 
 const AppShell: React.FC = () => {
   const location = useLocation();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("fengmou.sidebar.collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const raw = Number(localStorage.getItem("fengmou.sidebar.width"));
+      if (Number.isFinite(raw) && raw >= SIDEBAR_MIN_WIDTH && raw <= SIDEBAR_MAX_WIDTH) return raw;
+    } catch {
+      /* 隐私模式下 localStorage 不可用时回退默认值 */
+    }
+    return SIDEBAR_DEFAULT_WIDTH;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("fengmou.sidebar.collapsed", sidebarCollapsed ? "1" : "0");
+    } catch {
+      /* 忽略存储失败 */
+    }
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("fengmou.sidebar.width", String(Math.round(sidebarWidth)));
+    } catch {
+      /* 忽略存储失败 */
+    }
+  }, [sidebarWidth]);
 
   const getPageMeta = () => {
     const path = location.pathname;
@@ -109,11 +148,20 @@ const AppShell: React.FC = () => {
   };
 
   const meta = getPageMeta();
+  const shellWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#dbeafe_0%,#eff6ff_22%,#f8fafc_55%,#f8fafc_100%)]">
-      <Sidebar />
-      <div className="min-h-screen lg:pl-72">
+    <div
+      className="app-shell-bg min-h-screen"
+      style={{ "--sidebar-w": `${shellWidth}px` } as React.CSSProperties}
+    >
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        width={sidebarWidth}
+        onToggle={() => setSidebarCollapsed((value) => !value)}
+        onWidthChange={setSidebarWidth}
+      />
+      <div className="min-h-screen transition-[padding-left] duration-200 ease-out lg:pl-[var(--sidebar-w)]">
         <Header title={meta.title} subtitle={meta.subtitle} />
         <main className="px-4 pb-8 pt-4 md:px-6 lg:px-8">
           <MobileQuickNav />

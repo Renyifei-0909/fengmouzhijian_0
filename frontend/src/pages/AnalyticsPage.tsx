@@ -41,7 +41,7 @@ export const AnalyticsPage: React.FC = () => {
     <div className="space-y-4 page-enter">
       <Notice
         type="warning"
-        message="原型页 · 图表与数字来自本地静态 mock，不是后端数据库或冻结评测结果。不会写入报告、证据包或竞赛指标。"
+        message="原型展示页 · 图表数据来自本地示例。"
       />
       {notice ? <Notice type="info" message={notice} /> : null}
       <div className="flex items-center justify-between">
