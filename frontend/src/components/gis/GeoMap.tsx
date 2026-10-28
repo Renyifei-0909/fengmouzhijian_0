@@ -81,16 +81,42 @@ function toFeatureCollection(objects: EngineeringObject[]): FeatureCollection {
   };
 }
 
+function createObjectPreview(title: string, subtitle: string, detail: string): HTMLDivElement {
+  const card = document.createElement("div");
+  card.className = "min-w-40 space-y-1 px-1 py-0.5 text-xs text-slate-700";
+  const heading = document.createElement("p");
+  heading.className = "font-bold text-slate-950";
+  heading.textContent = title;
+  const summary = document.createElement("p");
+  summary.textContent = subtitle;
+  const meta = document.createElement("p");
+  meta.className = "text-[10px] text-slate-500";
+  meta.textContent = detail;
+  card.append(heading, summary, meta);
+  return card;
+}
+
 export type CaptureMarker = {
   longitude: number;
   latitude: number;
   synthetic?: boolean;
 };
 
+export type QgisDesignObject = {
+  id: string;
+  objectCode: string;
+  objectType: string;
+  sourceLayer: string;
+  featureIndex: number;
+  geometryType: string;
+  designVersion: string;
+};
+
 type GeoMapProps = {
   objects: EngineeringObject[];
   selectedObjectId: string | null;
   onSelectObject: (objectId: string) => void;
+  onSelectQgisObject?: (object: QgisDesignObject) => void;
   captureMarker?: CaptureMarker | null;
   className?: string;
   /** Optional online basemap style URL; offline blank style is always the default. */
@@ -103,6 +129,7 @@ export const GeoMap: React.FC<GeoMapProps> = ({
   objects,
   selectedObjectId,
   onSelectObject,
+  onSelectQgisObject,
   captureMarker = null,
   className = "",
   onlineStyleUrl = null,
@@ -113,6 +140,8 @@ export const GeoMap: React.FC<GeoMapProps> = ({
   const markerRef = useRef<Marker | null>(null);
   const onSelectRef = useRef(onSelectObject);
   onSelectRef.current = onSelectObject;
+  const onSelectQgisRef = useRef(onSelectQgisObject);
+  onSelectQgisRef.current = onSelectQgisObject;
 
   // Init map once.
   useEffect(() => {
@@ -130,9 +159,15 @@ export const GeoMap: React.FC<GeoMapProps> = ({
       zoom: 12,
       attributionControl: { compact: true },
     });
+    const hoverPopup = new maplibregl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: 12,
+    });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
     map.on("load", () => {
+      let selectedQgisFeature: { source: string; id: string | number } | null = null;
       if (!map.getSource("osm-de")) {
         map.addSource("osm-de", {
           type: "raster",
@@ -149,15 +184,15 @@ export const GeoMap: React.FC<GeoMapProps> = ({
             const response = await fetch(`/qgis-dreieich/${config.file}`);
             if (!response.ok) throw new Error(`QGIS layer load failed: ${config.file}`);
             const data = (await response.json()) as GeoJSON.FeatureCollection;
-            map.addSource(config.id, { type: "geojson", data });
+            map.addSource(config.id, { type: "geojson", data, generateId: true });
             if (config.type === "line") {
               map.addLayer({
                 id: config.id,
                 type: "line",
                 source: config.id,
                 paint: {
-                  "line-color": config.color,
-                  "line-width": config.width ?? 3,
+                  "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#ea580c", config.color],
+                  "line-width": ["case", ["boolean", ["feature-state", "selected"], false], (config.width ?? 3) + 3, config.width ?? 3],
                   "line-opacity": 0.92,
                 },
               });
@@ -167,14 +202,54 @@ export const GeoMap: React.FC<GeoMapProps> = ({
                 type: "circle",
                 source: config.id,
                 paint: {
-                  "circle-radius": config.radius ?? 5,
-                  "circle-color": config.color,
+                  "circle-radius": ["case", ["boolean", ["feature-state", "selected"], false], (config.radius ?? 5) + 3, config.radius ?? 5],
+                  "circle-color": ["case", ["boolean", ["feature-state", "selected"], false], "#ea580c", config.color],
                   "circle-opacity": 0.9,
                   "circle-stroke-width": 1.5,
                   "circle-stroke-color": "#ffffff",
                 },
               });
             }
+            map.on("click", config.id, (event) => {
+              const feature = event.features?.[0];
+              if (feature?.id == null) return;
+              if (selectedQgisFeature) {
+                map.setFeatureState(selectedQgisFeature, { selected: false });
+              }
+              selectedQgisFeature = { source: config.id, id: feature.id };
+              map.setFeatureState(selectedQgisFeature, { selected: true });
+              const featureIndex = Number(feature.id) + 1;
+              onSelectQgisRef.current?.({
+                id: `${config.id}-${feature.id}`,
+                objectCode: `${config.id.replace("qgis-", "").toUpperCase()}-${String(featureIndex).padStart(4, "0")}`,
+                objectType: config.label,
+                sourceLayer: config.label,
+                featureIndex,
+                geometryType: feature.geometry.type,
+                designVersion: "Dreieich Mitte · QGIS",
+              });
+            });
+            map.on("mousemove", config.id, (event) => {
+              map.getCanvas().style.cursor = "pointer";
+              const feature = event.features?.[0];
+              if (feature?.id == null) return;
+              const featureIndex = Number(feature.id) + 1;
+              const objectCode = `${config.id.replace("qgis-", "").toUpperCase()}-${String(featureIndex).padStart(4, "0")}`;
+              hoverPopup
+                .setLngLat(event.lngLat)
+                .setDOMContent(
+                  createObjectPreview(
+                    objectCode,
+                    config.label,
+                    `${feature.geometry.type} · 点击查看详情`,
+                  ),
+                )
+                .addTo(map);
+            });
+            map.on("mouseleave", config.id, () => {
+              map.getCanvas().style.cursor = "";
+              hoverPopup.remove();
+            });
             return data;
           }),
         )
@@ -276,18 +351,39 @@ export const GeoMap: React.FC<GeoMapProps> = ({
       map.on("click", FILL_LAYER, handleClick);
       map.on("click", LINE_LAYER, handleClick);
       map.on("click", POINT_LAYER, handleClick);
+      const showEngineeringPreview = (e: maplibregl.MapLayerMouseEvent) => {
+        const feature = e.features?.[0];
+        if (!feature) return;
+        map.getCanvas().style.cursor = "pointer";
+        hoverPopup
+          .setLngLat(e.lngLat)
+          .setDOMContent(
+            createObjectPreview(
+              String(feature.properties?.object_code || "工程对象"),
+              String(feature.properties?.object_type || "设计对象"),
+              `${String(feature.properties?.design_version || "—")} · 点击查看详情`,
+            ),
+          )
+          .addTo(map);
+      };
+      map.on("mousemove", FILL_LAYER, showEngineeringPreview);
+      map.on("mousemove", LINE_LAYER, showEngineeringPreview);
+      map.on("mousemove", POINT_LAYER, showEngineeringPreview);
       map.on("mouseenter", LINE_LAYER, () => {
         map.getCanvas().style.cursor = "pointer";
       });
       map.on("mouseleave", LINE_LAYER, () => {
         map.getCanvas().style.cursor = "";
+        hoverPopup.remove();
       });
       map.on("mouseenter", POINT_LAYER, () => {
         map.getCanvas().style.cursor = "pointer";
       });
       map.on("mouseleave", POINT_LAYER, () => {
         map.getCanvas().style.cursor = "";
+        hoverPopup.remove();
       });
+      map.on("mouseleave", FILL_LAYER, () => hoverPopup.remove());
     });
 
     // If online style fails, fall back to offline blank so the page never whites out.
@@ -305,6 +401,7 @@ export const GeoMap: React.FC<GeoMapProps> = ({
     mapRef.current = map;
     return () => {
       markerRef.current?.remove();
+      hoverPopup.remove();
       markerRef.current = null;
       map.remove();
       mapRef.current = null;

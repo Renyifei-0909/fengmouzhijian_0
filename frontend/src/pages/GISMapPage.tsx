@@ -8,7 +8,7 @@ import {
   ProjectGisSummary,
   WorkOrder,
 } from "../lib/api";
-import { GeoMap } from "../components/gis/GeoMap";
+import { GeoMap, QgisDesignObject } from "../components/gis/GeoMap";
 import { GpkgImportPanel } from "../components/gis/GpkgImportPanel";
 import { WorkOrderCapturePanel } from "../components/gis/WorkOrderCapturePanel";
 import { Notice } from "../components/ui/Notice";
@@ -47,6 +47,7 @@ export const GISMapPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [hasSelectedGpkg, setHasSelectedGpkg] = useState(false);
+  const [selectedQgisObject, setSelectedQgisObject] = useState<QgisDesignObject | null>(null);
   const [notice, setNotice] = useState("");
   const [creatingWo, setCreatingWo] = useState(false);
   const [mobileTab, setMobileTab] = useState<"map" | "objects" | "orders">("map");
@@ -135,6 +136,7 @@ export const GISMapPage: React.FC = () => {
   useEffect(() => {
     if (!projectId) return;
     setHasSelectedGpkg(false);
+    setSelectedQgisObject(null);
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -250,6 +252,7 @@ export const GISMapPage: React.FC = () => {
   };
 
   const onSelectObject = (objectId: string) => {
+    setSelectedQgisObject(null);
     setSelectedObjectId(objectId);
     const linked = summary?.work_orders.find((w) => w.engineering_object_id === objectId);
     if (linked) setSelectedWorkOrderId(linked.id);
@@ -414,16 +417,17 @@ export const GISMapPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(260px,0.85fr)_minmax(0,1.4fr)_minmax(300px,1fr)]">
-        <aside className={cn("space-y-4", mobileTab !== "objects" && "hidden lg:block")}>
-          {projectId ? (
-            <GpkgImportPanel
-              projectId={projectId}
-              disabled={loading}
-              onImported={(result) => void onGpkgImported(result)}
-              onFileSelected={() => setHasSelectedGpkg(true)}
-            />
-          ) : null}
-          <section className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm">
+        <aside className={cn("space-y-4 xl:contents", mobileTab !== "objects" && "hidden lg:block")}>
+          <div className="space-y-4 xl:col-start-1 xl:row-start-1 xl:row-span-2">
+            {projectId ? (
+              <GpkgImportPanel
+                projectId={projectId}
+                disabled={loading}
+                onImported={(result) => void onGpkgImported(result)}
+                onFileSelected={() => setHasSelectedGpkg(true)}
+              />
+            ) : null}
+            <section className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm">
             <div className="mb-3 flex items-center gap-2">
               <ProjectIcon className="h-4 w-4 text-sky-600" />
               <h3 className="text-sm font-semibold text-slate-900">{COPY.gpkgImportRecords}</h3>
@@ -481,14 +485,17 @@ export const GISMapPage: React.FC = () => {
               ))}
               {!packages.length ? <p className="text-xs text-slate-500">{COPY.noPackages}</p> : null}
             </div>
-          </section>
+            </section>
+          </div>
 
-          <section className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm">
-            <div className="mb-3 flex items-center gap-2">
-              <MapIcon className="h-4 w-4 text-sky-600" />
-              <h3 className="text-sm font-semibold text-slate-900">{COPY.statsObjects}</h3>
+          <section className="panel-card flex h-full min-h-[280px] flex-col overflow-hidden rounded-[24px] border border-sky-200 shadow-sm xl:col-start-3 xl:row-start-1 xl:row-span-2">
+            <div className="mb-3 flex items-center gap-3 border-b border-sky-100 bg-gradient-to-r from-sky-50 to-white px-4 py-3.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-600 text-white shadow-sm">
+                <MapIcon className="h-5 w-5" />
+              </span>
+              <h3 className="text-base font-bold tracking-wide text-slate-950">{COPY.statsObjects}</h3>
             </div>
-            <div className="max-h-64 space-y-2 overflow-y-auto">
+            <div className="max-h-56 space-y-2 overflow-y-auto px-4 pb-3">
               {(summary?.objects || []).map((obj) => (
                 <button
                   key={obj.id}
@@ -514,26 +521,24 @@ export const GISMapPage: React.FC = () => {
             </div>
 
             {selectedObject ? (
-              <div className="mt-3 space-y-2 border-t border-slate-100 pt-3 text-[11px]">
-                <p>
-                  <span className="text-slate-500">{COPY.objectCode}</span>{" "}
-                  <strong>{selectedObject.object_code}</strong>
-                </p>
-                <p>
-                  <span className="text-slate-500">{COPY.objectType}</span>{" "}
-                  <strong>{labelObjectType(selectedObject.object_type)}</strong>
-                </p>
-                <p>
-                  <span className="text-slate-500">{COPY.designVersion}</span>{" "}
-                  <strong>{selectedObject.design_version}</strong>
-                </p>
-                <p>
-                  <span className="text-slate-500">{COPY.sourceLayer}</span>{" "}
-                  <strong>{selectedObject.source_layer}</strong>
-                </p>
+              <div className="mx-4 mb-4 mt-2 flex flex-1 flex-col rounded-2xl border border-sky-200 bg-sky-50/60 p-4 text-xs shadow-sm">
+                <div className="mb-3 border-b border-sky-200 pb-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-700">已选工程对象</p>
+                  <p className="mt-1 text-base font-bold text-slate-950">{selectedObject.object_code}</p>
+                  <p className="mt-1 text-xs text-slate-500">{selectedObject.name}</p>
+                </div>
+                <div className="grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-2.5 leading-5">
+                  <span className="text-slate-500">{COPY.objectType}</span><strong>{labelObjectType(selectedObject.object_type)}</strong>
+                  <span className="text-slate-500">{COPY.designVersion}</span><strong>{selectedObject.design_version}</strong>
+                  <span className="text-slate-500">{COPY.sourceLayer}</span><strong>{selectedObject.source_layer}</strong>
+                  <span className="text-slate-500">来源要素</span><strong className="break-all">{selectedObject.source_feature_id}</strong>
+                  <span className="text-slate-500">几何类型</span><strong>{selectedObject.geometry_type}</strong>
+                  <span className="text-slate-500">坐标系</span><strong>EPSG:{selectedObject.geometry_source_crs_epsg}</strong>
+                  <span className="text-slate-500">关联状态</span><strong className="text-emerald-700">已关联设计对象</strong>
+                </div>
                 <button
                   type="button"
-                  className="text-sky-700 underline"
+                  className="mt-auto pt-4 text-left font-medium text-sky-700 underline"
                   onClick={() => setObjectTechOpen((v) => !v)}
                 >
                   {objectTechOpen ? "收起" : COPY.techDetails}
@@ -551,13 +556,38 @@ export const GISMapPage: React.FC = () => {
                   </>
                 ) : null}
               </div>
-            ) : null}
+            ) : selectedQgisObject ? (
+              <div className="mx-4 mb-4 mt-2 flex flex-1 flex-col rounded-2xl border border-sky-200 bg-sky-50/60 p-4 text-xs shadow-sm">
+                <div className="mb-3 border-b border-sky-200 pb-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-700">已选工程对象</p>
+                  <p className="mt-1 text-base font-bold text-slate-950">{selectedQgisObject.objectCode}</p>
+                  <p className="mt-1 text-xs text-slate-500">来自网页化 QGIS 工程图层</p>
+                </div>
+                <div className="grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-2.5 leading-5">
+                  <span className="text-slate-500">对象标识</span><strong className="break-all">{selectedQgisObject.id}</strong>
+                  <span className="text-slate-500">{COPY.objectType}</span><strong>{selectedQgisObject.objectType}</strong>
+                  <span className="text-slate-500">{COPY.designVersion}</span><strong>{selectedQgisObject.designVersion}</strong>
+                  <span className="text-slate-500">{COPY.sourceLayer}</span><strong>{selectedQgisObject.sourceLayer}</strong>
+                  <span className="text-slate-500">图形序号</span><strong>第 {selectedQgisObject.featureIndex} 个要素</strong>
+                  <span className="text-slate-500">几何类型</span><strong>{selectedQgisObject.geometryType}</strong>
+                  <span className="text-slate-500">显示坐标系</span><strong>WGS 84 · EPSG:4326</strong>
+                  <span className="text-slate-500">数据来源</span><strong>Dreieich Mitte QGIS 工程</strong>
+                  <span className="text-slate-500">关联状态</span><strong className="text-emerald-700">已关联地图要素</strong>
+                </div>
+              </div>
+            ) : (
+              <div className="mx-4 mb-4 mt-2 flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+                <MapIcon className="h-8 w-8 text-slate-300" />
+                <p className="mt-3 text-sm font-semibold text-slate-700">选择工程对象查看详情</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">将鼠标停留在地图要素上查看概览，点击后在这里显示完整信息。</p>
+              </div>
+            )}
           </section>
         </aside>
 
         <section
           className={cn(
-            "overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm",
+            "panel-card overflow-hidden rounded-[24px] border border-slate-200 shadow-sm xl:col-start-2 xl:row-start-1 xl:row-span-2",
             mobileTab !== "map" && "hidden lg:block",
           )}
         >
@@ -570,6 +600,11 @@ export const GISMapPage: React.FC = () => {
                 objects={summary?.objects ?? []}
                 selectedObjectId={selectedObjectId}
                 onSelectObject={onSelectObject}
+                onSelectQgisObject={(object) => {
+                  setSelectedObjectId(null);
+                  setSelectedQgisObject(object);
+                  setMobileTab("objects");
+                }}
                 captureMarker={captureMarker}
                 onlineStyleUrl={onlineStyleUrl}
                 showQgisProject
@@ -592,7 +627,12 @@ export const GISMapPage: React.FC = () => {
           </p>
         </section>
 
-        <aside className={cn("space-y-4", mobileTab !== "orders" && "hidden lg:block")}>
+        <aside
+          className={cn(
+            "space-y-4 xl:col-span-3 xl:row-start-3 xl:grid xl:grid-cols-3 xl:items-start xl:gap-4 xl:space-y-0",
+            mobileTab !== "orders" && "hidden lg:block",
+          )}
+        >
           <section className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
