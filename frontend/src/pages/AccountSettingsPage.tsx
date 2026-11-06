@@ -1,142 +1,106 @@
-import React, { useState } from "react";
-import { Notice } from "../components/ui/Notice";
-import { UserIcon, BellIcon, ShieldIcon, CheckIcon } from "../components/Icons";
+import { useEffect, useState } from "react";
+import { Link } from "react-router";
+import { ArrowUpRight, PanelLeft, RefreshCw, Server } from "lucide-react";
+import { SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from "../components/sidebar/Sidebar";
+import { api } from "../lib/api";
+import type { CapabilityMeta } from "../lib/api";
+import { RecordError, RecordMeta, RecordStatus, recordError, recordTime } from "./records-ui";
 
-export const AccountSettingsPage: React.FC = () => {
-  const [form, setForm] = useState({
-    name: "张工程师",
-    phone: "13800001234",
-    email: "zhang@demo.com",
-    department: "工程监管中心",
-    role: "项目经理",
-  });
-  const [notify, setNotify] = useState({ alarm: true, weekly: true, login: true, sms: false });
-  const [notice, setNotice] = useState("");
-
-  return (
-    <div className="space-y-5 page-enter">
-      <Notice
-        type="warning"
-        message="原型展示页 · 信息仅保存在当前浏览器。"
-      />
-      <div className="rounded-[28px] border border-sky-100 bg-gradient-to-r from-sky-700 via-blue-700 to-cyan-700 p-6 text-white shadow-[0_20px_80px_-32px_rgba(14,116,255,0.8)]">
-        <h2 className="text-2xl font-semibold text-white [text-shadow:0_1px_12px_rgba(2,8,23,0.55)]">账户设置（原型）</h2>
-        <p className="mt-2 text-sm text-sky-100">演示资料与通知偏好布局；不会写入后端用户库。</p>
-      </div>
-
-      {notice ? <Notice type="info" message={notice} /> : null}
-
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[0.7fr_1.3fr]">
-        <div className="space-y-5">
-          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
-            <div className="flex flex-col items-center text-center">
-              <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-sky-500 to-blue-700 text-2xl font-semibold text-white">
-                张
-              </div>
-              <p className="mt-4 text-lg font-semibold text-slate-900">{form.name}</p>
-              <p className="mt-1 text-sm text-slate-500">{form.department}</p>
-              <button
-                onClick={() => setNotice("原型动作：未上传头像文件，也未调用后端。")}
-                className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-all hover:border-sky-200 hover:text-sky-700"
-              >
-                更换头像
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-slate-900">登录安全</h3>
-              <ShieldIcon className="h-5 w-5 text-sky-600" />
-            </div>
-            <div className="space-y-3 text-sm text-slate-600">
-              <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
-                最近登录：2026-01-15 14:36 · 杭州
-              </div>
-              <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
-                双因素认证：已开启
-              </div>
-              <button
-                onClick={() =>
-                  setNotice("原型动作：未发送重置密码邮件，系统无真实邮箱通道。")
-                }
-                className="w-full rounded-2xl bg-sky-600 px-4 py-3 text-sm font-medium text-white transition-all hover:bg-sky-700"
-              >
-                重置密码
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-5">
-          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-slate-900">基础资料</h3>
-              <UserIcon className="h-5 w-5 text-sky-600" />
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              {[
-                ["name", "姓名", form.name],
-                ["phone", "手机号", form.phone],
-                ["email", "邮箱", form.email],
-                ["department", "部门", form.department],
-                ["role", "岗位", form.role],
-              ].map(([key, label, value]) => (
-                <label key={String(key)} className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-700">{label}</span>
-                  <input
-                    value={value}
-                    onChange={(event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition-all focus:border-sky-300 focus:bg-white"
-                  />
-                </label>
-              ))}
-            </div>
-            <button
-              onClick={() =>
-                setNotice("原型动作：资料仅更新本页 React 状态，未同步任何服务器档案。")
-              }
-              className="mt-5 rounded-2xl bg-sky-600 px-4 py-3 text-sm font-medium text-white transition-all hover:bg-sky-700"
-            >
-              保存账户信息
-            </button>
-          </div>
-
-          <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-slate-900">通知偏好</h3>
-              <BellIcon className="h-5 w-5 text-sky-600" />
-            </div>
-            <div className="space-y-3">
-              {[
-                ["alarm", "接收严重告警通知"],
-                ["weekly", "接收周报生成提醒"],
-                ["login", "接收异常登录提醒"],
-                ["sms", "短信同步现场处置结果"],
-              ].map(([key, label]) => (
-                <button
-                  key={String(key)}
-                  onClick={() => setNotify((prev) => ({ ...prev, [key]: !prev[key as keyof typeof prev] }))}
-                  className="flex w-full items-center justify-between rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-left"
-                >
-                  <span className="text-sm text-slate-700">{label}</span>
-                  <span className={`inline-flex h-7 w-12 items-center rounded-full p-1 transition-all ${notify[key as keyof typeof notify] ? "bg-sky-600 justify-end" : "bg-slate-300 justify-start"}`}>
-                    <span className="h-5 w-5 rounded-full bg-white" />
-                  </span>
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() =>
-                setNotice("原型动作：通知偏好未写入后端，也不会发送真实消息。")
-              }
-              className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-700 transition-all hover:bg-sky-100"
-            >
-              保存通知设置
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+type AccountSettingsProps = {
+  sidebarCollapsed?: boolean;
+  sidebarWidth?: number;
+  onSidebarCollapsedChange?: (collapsed: boolean) => void;
+  onSidebarWidthChange?: (width: number) => void;
 };
+
+type ServiceSnapshot = {
+  readiness: "ready" | "unavailable";
+  meta: CapabilityMeta | null;
+  checkedAt: string;
+  error?: string;
+};
+
+export function AccountSettingsPage({
+  sidebarCollapsed = false,
+  sidebarWidth = SIDEBAR_DEFAULT_WIDTH,
+  onSidebarCollapsedChange,
+  onSidebarWidthChange,
+}: AccountSettingsProps) {
+  const [snapshot, setSnapshot] = useState<ServiceSnapshot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    void Promise.allSettled([api.health(), api.meta()]).then(([health, meta]) => {
+      if (!active) return;
+      setSnapshot({
+        readiness: health.status === "fulfilled" && health.value.status === "ready" ? "ready" : "unavailable",
+        meta: meta.status === "fulfilled" ? meta.value : null,
+        checkedAt: new Date().toISOString(),
+        error: health.status === "rejected" ? recordError(health.reason, "服务状态读取失败。")
+          : meta.status === "rejected" ? recordError(meta.reason, "服务信息读取失败。") : undefined,
+      });
+      setLoading(false);
+    });
+    return () => { active = false; };
+  }, [revision]);
+
+  function restoreNavigation() {
+    onSidebarCollapsedChange?.(false);
+    onSidebarWidthChange?.(SIDEBAR_DEFAULT_WIDTH);
+  }
+
+  const schema = snapshot?.meta?.database_schema;
+  const execution = snapshot?.meta?.verification_execution.mode;
+  const canConfigure = Boolean(onSidebarCollapsedChange && onSidebarWidthChange);
+  return <div className="fm-records fm-settings-page page-enter">
+    <section className="fm-panel">
+      <div className="fm-record-section-head">
+        <h2 className="inline-flex items-center gap-2"><PanelLeft size={17} className="text-sky-300" aria-hidden="true" />导航与布局</h2>
+        {canConfigure ? <button className="fm-button" type="button" disabled={!sidebarCollapsed && sidebarWidth === SIDEBAR_DEFAULT_WIDTH} onClick={restoreNavigation}>恢复默认</button> : null}
+      </div>
+      <div className="fm-record-body">
+        <div className="fm-settings-row">
+          <div><h3>侧栏模式</h3><p className="fm-record-muted">设置本机工作台的导航显示方式</p></div>
+          {onSidebarCollapsedChange ? <div className="fm-record-segments" role="group" aria-label="侧栏模式">
+            <button type="button" aria-pressed={!sidebarCollapsed} onClick={() => onSidebarCollapsedChange(false)}>展开</button>
+            <button type="button" aria-pressed={sidebarCollapsed} onClick={() => onSidebarCollapsedChange(true)}>收起</button>
+          </div> : <RecordStatus>{sidebarCollapsed ? "收起" : "展开"}</RecordStatus>}
+        </div>
+        <div className="fm-settings-row">
+          <div><h3><label htmlFor="fm-settings-sidebar-width">侧栏展开宽度</label></h3><p className="fm-record-muted">展开导航后应用</p></div>
+          {onSidebarWidthChange ? <div className="fm-settings-range">
+            <input id="fm-settings-sidebar-width" type="range" min={SIDEBAR_MIN_WIDTH} max={SIDEBAR_MAX_WIDTH} step={1} value={Math.round(sidebarWidth)}
+              aria-valuetext={`${Math.round(sidebarWidth)} 像素`} onChange={(event) => onSidebarWidthChange(Number(event.target.value))} />
+            <output htmlFor="fm-settings-sidebar-width" className="fm-record-numeric">{Math.round(sidebarWidth)} 像素</output>
+          </div> : <span className="fm-record-numeric">{Math.round(sidebarWidth)} 像素</span>}
+        </div>
+      </div>
+    </section>
+    <section className="fm-panel" aria-busy={loading}>
+      <div className="fm-record-section-head">
+        <h2 className="inline-flex items-center gap-2"><Server size={17} className="text-sky-300" aria-hidden="true" />服务连接</h2>
+        <div className="fm-record-actions">
+          <RecordStatus tone={loading ? "blue" : snapshot?.readiness === "ready" ? "green" : "red"}>
+            {loading ? "正在检查" : snapshot?.readiness === "ready" ? "服务就绪" : "服务暂不可用"}
+          </RecordStatus>
+          <button className="fm-button" type="button" disabled={loading} onClick={() => setRevision((value) => value + 1)}>
+            <RefreshCw size={15} aria-hidden="true" />刷新状态
+          </button>
+        </div>
+      </div>
+      <div className="fm-record-body">
+        <RecordMeta entries={[
+          ["服务版本", snapshot?.meta?.service_version],
+          ["核验执行", execution === "external" ? "独立执行节点" : execution === "inline" ? "服务内执行" : null],
+          ["数据结构", schema ? schema.at_head && schema.drift_free ? "已同步" : "待检查" : null],
+          ["检查时间", recordTime(snapshot?.checkedAt)],
+        ]} />
+        {snapshot?.error ? <RecordError message={snapshot.error} /> : null}
+        <Link className="fm-link inline-flex items-center gap-1" to="/backend-workflow">前往核验中心 <ArrowUpRight size={14} aria-hidden="true" /></Link>
+      </div>
+    </section>
+  </div>;
+}

@@ -1,97 +1,188 @@
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import { Link, useParams } from "react-router";
-import { api, ApiRequestError, WorkOrder } from "../lib/api";
+import { ArrowLeft, ClipboardList, RefreshCw, UserRound } from "lucide-react";
+import { api, ApiRequestError } from "../lib/api";
+import type { EngineeringObject, WorkOrder } from "../lib/api";
 import { WorkOrderCapturePanel } from "../components/gis/WorkOrderCapturePanel";
 import { Notice } from "../components/ui/Notice";
-import { MapIcon, ShieldIcon } from "../components/Icons";
-import { COPY, friendlyApiError, labelWorkOrderStatus } from "../lib/productCopy";
+import { engineeringObjectDisplayName, friendlyApiError, labelObjectType, labelWorkOrderStatus } from "../lib/productCopy";
+import { serviceTimestamp } from "../lib/serviceTime";
+import "../components/gis/workbench.css";
 
-export const WorkOrderPage: React.FC = () => {
-  const { id = "" } = useParams();
-  const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [errorDetail, setErrorDetail] = useState<string | null>(null);
+const ASSIGNABLE = new Set(["draft", "assigned", "remediating"]);
+
+export function WorkOrderPage() {
+  const { id } = useParams();
+  return id ? <WorkOrderDetail key={id} id={id} /> : <Link className="fm-button" to="/gis-map">返回工程作业</Link>;
+}
+
+function WorkOrderDetail({ id }: { id: string }) {
+  const [order, setOrder] = useState<WorkOrder | null>(null);
+  const [object, setObject] = useState<EngineeringObject | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const request = useRef(0);
+  const mounted = useRef(false);
 
-  const load = useCallback(async () => {
-    if (!id) return;
-    setLoading(true);
-    setError(null);
-    setErrorDetail(null);
-    try {
-      setWorkOrder(await api.getWorkOrder(id));
-    } catch (err) {
-      setWorkOrder(null);
-      const raw = err instanceof ApiRequestError ? err.message : "无法加载工单";
-      setError(friendlyApiError(raw));
-      setErrorDetail(raw);
-    } finally {
-      setLoading(false);
-    }
+  const updateOrder = useCallback((next: WorkOrder) => {
+    if (next.id !== id || !mounted.current) return;
+    setOrder((previous) => previous && serviceTimestamp(previous.updated_at) > serviceTimestamp(next.updated_at) ? previous : next);
   }, [id]);
 
+  const load = useCallback(async () => {
+    const seq = ++request.current;
+    setLoading(true);
+    setError("");
+    try {
+      const next = await api.getWorkOrder(id);
+      if (seq === request.current) updateOrder(next);
+    } catch (reason) {
+      if (seq === request.current) setError(reason instanceof ApiRequestError ? friendlyApiError(reason.message) : "无法读取工单");
+    } finally {
+      if (seq === request.current) setLoading(false);
+    }
+  }, [id, updateOrder]);
+
   useEffect(() => {
+    mounted.current = true;
     void load();
+    return () => {
+      mounted.current = false;
+      request.current += 1;
+    };
   }, [load]);
 
-  if (loading && !workOrder) {
-    return (
-      <div className="rounded-[28px] border border-slate-200 panel-card p-8 text-sm text-slate-600">
-        正在加载工单…
-      </div>
-    );
-  }
+  const objectId = order?.engineering_object_id;
+  useEffect(() => {
+    if (!objectId) return;
+    let live = true;
+    void api.getEngineeringObject(objectId).then((next) => {
+      if (live) setObject(next);
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [objectId]);
 
-  if (!workOrder) {
-    return (
-      <div className="space-y-4">
-        <Notice type="warning" message={error || "工单不存在"} />
-        {errorDetail && errorDetail !== error ? (
-          <details className="text-xs text-slate-500">
-            <summary className="cursor-pointer">{COPY.techDetails}</summary>
-            <pre className="mt-1 whitespace-pre-wrap break-all">{errorDetail}</pre>
-          </details>
-        ) : null}
-        <Link to="/gis-map" className="text-sm font-medium text-sky-700">
-          返回工程作业
-        </Link>
-      </div>
-    );
-  }
+  const gisUrl = order ? `/gis-map?${new URLSearchParams({
+    project: order.project_id, object: order.engineering_object_id, workOrder: order.id,
+  }).toString()}` : "/gis-map";
+  const procedure = order?.procedure_code === "TRENCH-BEFORE-BACKFILL" ? "沟槽回填前" : order?.procedure_code;
+  const snapshotCode = typeof order?.design_snapshot.object_code === "string" ? order.design_snapshot.object_code : "";
+  const snapshotName = typeof order?.design_snapshot.name === "string" ? order.design_snapshot.name : "";
+  const linkedObject = object?.id === objectId ? object : null;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 page-enter">
-      <div className="rounded-[28px] border border-sky-100 bg-gradient-to-r from-slate-900 via-sky-900 to-cyan-800 p-5 text-white">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px]">
-              <ShieldIcon className="h-3.5 w-3.5" /> 施工工单
-            </div>
-            <h2 className="text-xl font-semibold">{workOrder.work_order_code}</h2>
-            <p className="mt-2 text-sm text-sky-100">
-              {labelWorkOrderStatus(workOrder.status)} · {workOrder.procedure_code} ·{" "}
-              {COPY.designVersion} {workOrder.design_version}
-            </p>
+    <div className="gis-workbench page-enter">
+      <header className="gis-page-head">
+        <div className="gis-page-heading">
+          <span className="fm-label">施工工单</span>
+          <h2>{order?.work_order_code ?? "工单详情"}</h2>
+        </div>
+        <div className="gis-actions">
+          <Link className="fm-button" to={gisUrl}><ArrowLeft size={14} aria-hidden="true" /> 工程作业</Link>
+          <button type="button" className="fm-button" disabled={loading} onClick={() => void load()}><RefreshCw size={14} aria-hidden="true" /> 刷新</button>
+        </div>
+      </header>
+      {error && <Notice type="warning" message={error} />}
+      {!order && loading && <p className="fm-panel gis-empty" role="status">正在读取工单…</p>}
+      {order && (
+        <>
+          <div className="gis-order-overview">
+            <section className="fm-panel gis-order-facts">
+              <div className="gis-section-head">
+                <h3><ClipboardList size={15} aria-hidden="true" /> 作业信息</h3>
+                <span className="gis-status" data-status={order.status}>
+                  工单状态 · {labelWorkOrderStatus(order.status)}
+                </span>
+              </div>
+              <dl className="gis-order-fact-row">
+                <div><dt>工程对象</dt><dd>{engineeringObjectDisplayName(linkedObject?.name || snapshotName || linkedObject?.object_code || snapshotCode || "—")}</dd></div>
+                <div><dt>工序</dt><dd>{procedure || "—"}</dd></div>
+                <div><dt>设计版本</dt><dd>{order.design_version}</dd></div>
+                <div><dt>空间容差</dt><dd>{order.spatial_tolerance_m} 米</dd></div>
+                <div><dt>定位精度阈值</dt><dd>{order.gps_accuracy_threshold_m} 米</dd></div>
+              </dl>
+              <details className="gis-disclosure">
+                <summary>设计基线与核验要求</summary>
+                <dl className="gis-data">
+                  <div><dt>对象编号</dt><dd>{linkedObject?.object_code || snapshotCode || "—"}</dd></div>
+                  {linkedObject && <div><dt>对象类型</dt><dd>{labelObjectType(linkedObject.object_type)}</dd></div>}
+                  <div><dt>工单备注</dt><dd>{order.notes || "—"}</dd></div>
+                </dl>
+                <pre>{JSON.stringify({
+                  design: order.design_snapshot,
+                  spatial: order.geometry_snapshot,
+                  rules: order.rules_snapshot,
+                }, null, 2)}</pre>
+              </details>
+            </section>
+            <Assignment order={order} onUpdated={updateOrder} />
           </div>
-          <Link
-            to={`/gis-map?project=${encodeURIComponent(workOrder.project_id)}&workOrder=${encodeURIComponent(workOrder.id)}`}
-            className="inline-flex items-center gap-1 rounded-2xl border border-white/20 bg-white/10 px-3 py-2 text-sm"
-          >
-            <MapIcon className="h-4 w-4" /> 工程作业
-          </Link>
-        </div>
-      </div>
-      {error ? (
-        <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-          {error}
-        </div>
-      ) : null}
-      <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
-        <WorkOrderCapturePanel workOrder={workOrder} onWorkOrderUpdated={setWorkOrder} />
-      </div>
-      <Link to="/backend-workflow" className="inline-flex text-sm font-medium text-sky-700 hover:underline">
-        {COPY.goVerificationCenter}
-      </Link>
+          <WorkOrderCapturePanel workOrder={order} onWorkOrderUpdated={updateOrder} />
+        </>
+      )}
     </div>
   );
-};
+}
+
+function Assignment({ order, onUpdated }: { order: WorkOrder; onUpdated: (order: WorkOrder) => void }) {
+  const [name, setName] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const lock = useRef(false);
+  const canAssign = ASSIGNABLE.has(order.status);
+  const assigning = canAssign && (editing || order.status === "draft");
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    const assignee = name.trim();
+    if (!assignee || !canAssign || lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const updated = await api.assignWorkOrder(order.id, assignee);
+      onUpdated(updated);
+      setEditing(false);
+      setNotice("已分派");
+    } catch (reason) {
+      setError(reason instanceof ApiRequestError ? friendlyApiError(reason.message) : "分派未确认，请刷新工单状态后重试。");
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="fm-panel gis-order-facts">
+      <div className="gis-section-head">
+        <h3><UserRound size={15} aria-hidden="true" /> 执行分派</h3>
+        {notice && <span role="status">{notice}</span>}
+      </div>
+      <div className="gis-assignment">
+        {assigning ? (
+          <form className="gis-form" onSubmit={(event) => void submit(event)}>
+            <label>执行人<input className="fm-input" required value={name} onChange={(event) => setName(event.target.value)} disabled={busy} placeholder="填写执行人姓名" /></label>
+            <div className="gis-actions">
+              {editing && <button type="button" className="fm-button" disabled={busy} onClick={() => { setEditing(false); setError(""); }}>取消</button>}
+              <button type="submit" className="fm-button fm-button-primary" disabled={busy || !name.trim()}>{busy ? "正在分派…" : "分派工单"}</button>
+            </div>
+          </form>
+        ) : (
+          <div className="gis-assignment-display">
+            <div><span>执行人</span><strong>{order.assigned_to || "待分派"}</strong></div>
+            {canAssign && <button type="button" className="fm-button" onClick={() => {
+              setName(order.assigned_to || "");
+              setNotice("");
+              setEditing(true);
+            }}>{order.status === "assigned" ? "调整执行人" : "重新分派"}</button>}
+          </div>
+        )}
+        {error && <p className="gis-record-error" role="alert">{error}</p>}
+      </div>
+    </section>
+  );
+}

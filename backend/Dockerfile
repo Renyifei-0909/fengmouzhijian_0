@@ -1,4 +1,4 @@
-FROM python:3.12.13-slim AS builder
+FROM python:3.12.13-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -14,7 +14,7 @@ COPY pyproject.toml uv.lock build-constraints.txt README.md MANIFEST.in alembic.
 COPY scripts/verify_dependency_lock.py ./scripts/verify_dependency_lock.py
 RUN python scripts/verify_dependency_lock.py \
     && uv lock --check --no-python-downloads \
-    && uv sync --locked --no-install-project --no-python-downloads
+    && uv sync --locked --no-install-project --no-python-downloads --extra gpkg
 
 COPY app ./app
 RUN uv build --wheel \
@@ -29,7 +29,7 @@ RUN uv build --wheel \
         /tmp/dist/*.whl \
     && uv pip check --python /opt/venv/bin/python --no-python-downloads
 
-FROM python:3.12.13-slim
+FROM python:3.12.13-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

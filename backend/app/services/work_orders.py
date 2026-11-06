@@ -4,11 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import (
+    AuditEvent,
     DesignBaseline,
     EngineeringObject,
+    EvidenceCapture,
+    FindingCase,
+    SealOperation,
+    VerificationJob,
     WorkOrder,
     new_id,
     utcnow,
@@ -23,8 +29,8 @@ WORK_ORDER_TRANSITIONS: dict[str, frozenset[str]] = {
     "evidence_uploaded": frozenset({"analyzing", "closed"}),
     "analyzing": frozenset({"needs_review", "deviation", "approved", "closed"}),
     "needs_review": frozenset({"approved", "deviation", "remediating", "closed"}),
-    "approved": frozenset({"closed"}),
-    "deviation": frozenset({"remediating", "closed"}),
+    "approved": frozenset({"deviation", "remediating", "closed"}),
+    "deviation": frozenset({"approved", "remediating", "closed"}),
     "remediating": frozenset({"assigned", "evidence_uploaded", "closed"}),
     "closed": frozenset(),
 }
@@ -42,6 +48,7 @@ WORK_ORDER_AUDIT_ACTIONS = {
     "remediation_started",
     "remediation_evidence_submitted",
     "remediation_closed",
+    "work_order_review_state_synced",
 }
 
 # Stable domain error codes (non-retryable unless noted).
@@ -51,6 +58,7 @@ WORK_ORDER_MISSING = "WORK_ORDER_MISSING"
 # Terminal statuses produced by analysis-completion transitions.
 ANALYSIS_COMPLETION_TARGET_STATUSES = frozenset({"needs_review", "deviation", "approved"})
 ANALYSIS_COMPLETION_ENTRY_STATUSES = frozenset({"evidence_uploaded", "analyzing"})
+REVIEW_MANAGED_STATUSES = frozenset({"needs_review", "deviation", "approved", "remediating"})
 
 
 class WorkOrderError(ValueError):
@@ -384,6 +392,93 @@ def map_compliance_to_work_order_status(verdict: str) -> str:
     return mapping.get(verdict, "needs_review")
 
 
+def _work_order_jobs():
+    return (
+        select(VerificationJob.id)
+        .select_from(VerificationJob)
+        .join(
+            EvidenceCapture,
+            (EvidenceCapture.verification_job_id == VerificationJob.id)
+            & (EvidenceCapture.evidence_id == VerificationJob.evidence_id)
+            & (EvidenceCapture.project_id == VerificationJob.project_id),
+        )
+        .join(
+            WorkOrder,
+            (WorkOrder.id == EvidenceCapture.work_order_id)
+            & (WorkOrder.project_id == VerificationJob.project_id)
+            & (WorkOrder.baseline_id == VerificationJob.baseline_id),
+        )
+    )
+
+
+def _sealed_work_order_jobs():
+    return _work_order_jobs().join(SealOperation, SealOperation.job_id == VerificationJob.id).where(
+        VerificationJob.status == "approved", SealOperation.state == "completed"
+    )
+
+
+def _sync_reviewed_work_order(db: Session, work_order_id: str, actor: str) -> None:
+    # Serialize sibling-case resolutions against the same order. Flush their
+    # state before the aggregation so a case and its order commit together.
+    db.flush()
+    order = db.get(WorkOrder, work_order_id, with_for_update=True, populate_existing=True)
+    if order is None or order.status not in REVIEW_MANAGED_STATUSES:
+        return
+
+    latest_job_id = db.scalar(
+        _work_order_jobs().where(WorkOrder.id == order.id)
+        .order_by(EvidenceCapture.server_received_at.desc(), EvidenceCapture.id.desc()).limit(1)
+    )
+    sealed_jobs = _sealed_work_order_jobs().where(WorkOrder.id == order.id)
+    if latest_job_id is None or db.scalar(sealed_jobs.where(VerificationJob.id == latest_job_id)) is None:
+        # An earlier seal cannot finish a newer capture that still needs review.
+        return
+
+    cases = db.execute(
+        select(FindingCase.status, FindingCase.closure_proof_id)
+        .where(FindingCase.source_job_id.in_(sealed_jobs))
+    ).all()
+    if any(state in {"remediation_in_progress", "verification_pending"} for state, _ in cases):
+        target = "remediating"
+    elif any(state == "open" for state, _ in cases):
+        target = "remediating" if order.status == "remediating" else "deviation"
+    elif any(state == "closed" and proof_id for state, proof_id in cases):
+        target = "remediating" if any(state == "pending_triage" for state, _ in cases) else "closed"
+    elif order.status == "remediating":
+        return
+    else:
+        target = "approved"
+    if target == order.status:
+        return
+    previous = order.status
+    transition_work_order_strict(order, target, stage="sealed_review_sync")
+    db.add(AuditEvent(
+        entity_type="work_order",
+        entity_id=order.id,
+        action="work_order_review_state_synced",
+        actor=actor,
+        payload_json={"from_status": previous, "to_status": target, "capture_job_id": latest_job_id},
+    ))
+
+
+def sync_work_order_for_source(db: Session, source_job_id: str, *, actor: str) -> None:
+    order_id = db.scalar(
+        _work_order_jobs().with_only_columns(WorkOrder.id).where(VerificationJob.id == source_job_id)
+    )
+    if order_id is not None:
+        _sync_reviewed_work_order(db, order_id, actor)
+
+
+def reconcile_sealed_work_orders(db: Session) -> None:
+    """Bring orders sealed before this lifecycle integration up to date."""
+    order_ids = db.scalars(
+        _sealed_work_order_jobs().with_only_columns(WorkOrder.id)
+        .where(WorkOrder.status.in_(REVIEW_MANAGED_STATUSES)).distinct().order_by(WorkOrder.id)
+    ).all()
+    for order_id in order_ids:
+        _sync_reviewed_work_order(db, order_id, "startup-recovery")
+
+
 def work_order_public_dict(work_order: WorkOrder) -> dict[str, Any]:
     return {
         "id": work_order.id,
@@ -456,6 +551,8 @@ __all__ = [
     "frozen_rules_snapshot",
     "frozen_spatial_policy",
     "map_compliance_to_work_order_status",
+    "reconcile_sealed_work_orders",
+    "sync_work_order_for_source",
     "transition_work_order",
     "transition_work_order_strict",
     "work_order_public_dict",

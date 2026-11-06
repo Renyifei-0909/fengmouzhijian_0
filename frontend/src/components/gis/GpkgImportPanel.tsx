@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { OperationStatus } from "../ui/OperationStatus";
 import {
   api,
   ApiRequestError,
   StandardGpkgImportResult,
   StandardGpkgPreviewResult,
 } from "../../lib/api";
-import { COPY } from "../../lib/productCopy";
-import { cn } from "../../utils/cn";
+import { Check, FileUp } from "lucide-react";
+import { COPY, friendlyApiError } from "../../lib/productCopy";
+import "./workbench.css";
 
 export type GpkgImportPhase =
   | "idle"
@@ -25,12 +27,8 @@ type Props = {
   disabled?: boolean;
   onImported?: (result: StandardGpkgImportResult) => void;
   onFileSelected?: (file: File) => void;
+  onSavingChange?: (saving: boolean) => void;
 };
-
-function shortFingerprint(sha: string): string {
-  if (!sha || sha.length < 16) return sha || "—";
-  return `${sha.slice(0, 8)}…${sha.slice(-6)}`;
-}
 
 function formatBytes(n: number): string {
   if (!Number.isFinite(n) || n < 0) return "—";
@@ -48,17 +46,23 @@ function formatExpiry(unix: number | null | undefined): string {
   }
 }
 
-function suggestPackageCode(projectId: string): string {
-  const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 12);
-  const suffix = projectId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6) || "PROJ";
-  return `PKG-${suffix}-${stamp}`;
+function suggestPackageCode(): string {
+  const stamp = new Date().toISOString();
+  return `SJ-${stamp.slice(0, 10).replace(/-/g, "")}-${stamp.slice(11, 19).replace(/:/g, "")}`;
 }
+
+const explainImportError = (error: unknown, fallback: string) => {
+  if (!(error instanceof ApiRequestError)) return fallback;
+  const message = friendlyApiError(error.message);
+  return /[一-鿿]/.test(message) ? message : fallback;
+};
 
 export const GpkgImportPanel: React.FC<Props> = ({
   projectId,
   disabled,
   onImported,
   onFileSelected,
+  onSavingChange,
 }) => {
   const fileRef = useRef<HTMLInputElement>(null);
   const confirmLock = useRef(false);
@@ -66,11 +70,9 @@ export const GpkgImportPanel: React.FC<Props> = ({
   const requestGen = useRef(0);
   const [phase, setPhase] = useState<GpkgImportPhase>("idle");
   const [file, setFile] = useState<File | null>(null);
-  const [packageCode, setPackageCode] = useState(() => suggestPackageCode(projectId));
+  const [packageCode, setPackageCode] = useState(suggestPackageCode);
   const [preview, setPreview] = useState<StandardGpkgPreviewResult | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [techOpen, setTechOpen] = useState(false);
-  const [jsonOpen, setJsonOpen] = useState(false);
   const [jsonImporting, setJsonImporting] = useState(false);
 
   // Project switch: clear all import state
@@ -82,20 +84,21 @@ export const GpkgImportPanel: React.FC<Props> = ({
     setFile(null);
     setPreview(null);
     setMessage(null);
-    setPackageCode(suggestPackageCode(projectId));
+    setJsonImporting(false);
+    setPackageCode(suggestPackageCode());
     if (fileRef.current) fileRef.current.value = "";
   }, [projectId]);
 
-  const canPrecheck = Boolean(
-    projectId && file && packageCode.trim().length >= 2 && !disabled && !precheckLock.current,
-  );
   const confirming = phase === "confirming";
+  const busy = disabled || phase === "uploading" || confirming || jsonImporting;
+  const canPrecheck = Boolean(projectId && file && packageCode.trim().length >= 2 && !busy);
+
   const canConfirm =
     phase === "preview_ready" &&
     preview?.valid === true &&
     Boolean(preview?.preview_token) &&
     !confirmLock.current &&
-    !disabled;
+    !busy;
 
   const statusLabel = useMemo(() => {
     switch (phase) {
@@ -166,10 +169,10 @@ export const GpkgImportPanel: React.FC<Props> = ({
       setPreview(result);
       if (result.valid && result.preview_token) {
         setPhase("preview_ready");
-        setMessage(result.truth_note || COPY.gpkgPreviewReady);
+        setMessage(null);
       } else {
         setPhase("preview_invalid");
-        setMessage(result.errors?.join("；") || COPY.gpkgBlocked);
+        setMessage("请检查文件格式、图层及坐标系统。");
       }
     } catch (err) {
       if (gen !== requestGen.current) return;
@@ -184,7 +187,7 @@ export const GpkgImportPanel: React.FC<Props> = ({
         setPhase("preview_invalid");
       }
       setPreview(null);
-      setMessage(apiErr?.message || "预检失败");
+      setMessage(explainImportError(err, "请检查文件和设计包编号后重试。"));
     } finally {
       if (gen === requestGen.current) {
         precheckLock.current = false;
@@ -193,12 +196,12 @@ export const GpkgImportPanel: React.FC<Props> = ({
   };
 
   const onConfirm = async () => {
-    if (!preview?.valid || !preview.preview_token || confirmLock.current) return;
-    if (phase !== "preview_ready") return;
+    if (!canConfirm || !preview?.preview_token || confirmLock.current) return;
     confirmLock.current = true;
     const gen = requestGen.current;
     setPhase("confirming");
-    setMessage(COPY.gpkgConfirming);
+    setMessage(null);
+    onSavingChange?.(true);
     try {
       const result = await api.confirmStandardGpkg(projectId, {
         package_code: preview.package_code,
@@ -209,9 +212,7 @@ export const GpkgImportPanel: React.FC<Props> = ({
       if (gen !== requestGen.current) return;
       setPhase("success");
       setPreview(null);
-      setMessage(
-        `已导入 ${result.package.package_code}，工程对象 ${result.package.object_count} 个。${result.truth_note}`,
-      );
+      setMessage(`已导入 ${result.package.object_count} 个工程对象。`);
       onImported?.(result);
     } catch (err) {
       if (gen !== requestGen.current) return;
@@ -228,27 +229,35 @@ export const GpkgImportPanel: React.FC<Props> = ({
         apiErr?.status === 409
       ) {
         setPhase("conflict");
-        setMessage(apiErr?.message || "导入冲突");
+        setMessage(explainImportError(err, "请核对设计包编号及导入记录。"));
       } else if (apiErr?.status === null) {
         setPhase("network_error");
-        setMessage(apiErr.message);
+        setMessage(explainImportError(err, "请检查网络连接后重试。"));
       } else {
         setPhase("preview_invalid");
-        setMessage(apiErr?.message || "确认导入失败");
+        setMessage(explainImportError(err, "无法确认导入，请重新预检。"));
       }
     } finally {
       if (gen === requestGen.current) {
         confirmLock.current = false;
+        onSavingChange?.(false);
       }
     }
   };
 
   const onJsonCompat = async (f: File | null) => {
-    if (!f || !projectId) return;
+    if (!f || !projectId || busy || confirmLock.current || precheckLock.current) return;
+    confirmLock.current = true;
+    const gen = ++requestGen.current;
+    setPhase("idle");
+    setPreview(null);
     setJsonImporting(true);
+    onSavingChange?.(true);
     setMessage(null);
     try {
       const result = await api.importDesignPackageJson(projectId, f);
+      if (gen !== requestGen.current) return;
+      setPhase("success");
       setMessage(
         `兼容格式已导入 ${result.package.package_code}，工程对象 ${result.package.object_count} 个。`,
       );
@@ -260,202 +269,144 @@ export const GpkgImportPanel: React.FC<Props> = ({
         source_classification: result.package.synthetic ? "sample_or_unverified" : "library",
       });
     } catch (err) {
-      setMessage(err instanceof ApiRequestError ? err.message : "兼容格式导入失败");
+      if (gen === requestGen.current) {
+        setPhase("preview_invalid");
+        setMessage(explainImportError(err, "兼容设计包导入失败。"));
+      }
     } finally {
-      setJsonImporting(false);
+      if (gen === requestGen.current) {
+        confirmLock.current = false;
+        setJsonImporting(false);
+        onSavingChange?.(false);
+      }
     }
   };
 
-  const showConfirmButton = phase === "preview_ready" && preview?.valid === true;
-  const packageCodeLocked = phase === "preview_ready" || phase === "confirming";
-  const hasHiddenError = ["preview_invalid", "token_expired", "conflict", "network_error"].includes(
-    phase,
-  );
+  const packageCodeLocked = phase === "preview_ready" || confirming;
+  const hasError = ["preview_invalid", "token_expired", "conflict", "network_error"].includes(phase);
+  const layers = preview?.layers_summary ?? [];
 
   return (
-    <section className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm" data-testid="gpkg-import-panel">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-slate-900">{COPY.gpkgImportTitle}</h3>
-        <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-900">
-          {COPY.gpkgSourceClassSample}
-        </span>
-      </div>
-      <p className="mb-3 text-[11px] leading-4 text-slate-500">{COPY.importHelp}</p>
-
-      <label className="mb-2 block text-[11px] font-medium text-slate-600">
-        {COPY.gpkgPackageCode}
-        <input
-          type="text"
-          data-testid="gpkg-package-code"
-          value={packageCode}
-          onChange={(e) => onPackageCodeChange(e.target.value)}
-          disabled={disabled || packageCodeLocked || phase === "uploading"}
-          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 disabled:bg-slate-50"
-          maxLength={100}
-          autoComplete="off"
-        />
-      </label>
-
-      <label
-        className={cn(
-          "mb-2 flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-sky-300 bg-sky-50/60 px-3 py-3 text-sm font-medium text-sky-800 hover:bg-sky-50",
-          (disabled || phase === "uploading" || phase === "confirming") && "pointer-events-none opacity-60",
-        )}
-      >
-        {file ? file.name : COPY.gpkgSelectFile}
-        <input
-          ref={fileRef}
-          data-testid="gpkg-file-input"
-          type="file"
-          accept=".gpkg,application/geopackage+sqlite3,application/octet-stream"
-          className="hidden"
-          disabled={disabled || phase === "uploading" || phase === "confirming"}
-          onChange={(e) => {
-            const f = e.target.files?.[0] ?? null;
-            e.target.value = "";
-            onPickFile(f);
-          }}
-        />
-      </label>
-
-      <div className="mb-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          data-testid="gpkg-precheck-btn"
-          disabled={!canPrecheck || phase === "uploading" || phase === "confirming"}
-          onClick={() => void onPrecheck()}
-          className="rounded-xl bg-sky-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {phase === "uploading" ? COPY.gpkgUploading : COPY.gpkgRunPrecheck}
-        </button>
-        {showConfirmButton ? (
-          <button
-            type="button"
-            data-testid="gpkg-confirm-btn"
-            disabled={!canConfirm}
-            onClick={() => void onConfirm()}
-            className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {COPY.gpkgConfirmImport}
-          </button>
-        ) : null}
-        {(phase === "preview_invalid" ||
-          phase === "token_expired" ||
-          phase === "conflict" ||
-          phase === "success" ||
-          phase === "network_error") && (
-          <button
-            type="button"
-            data-testid="gpkg-reupload-btn"
-            onClick={resetToIdle}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-          >
-            {COPY.gpkgReupload}
-          </button>
-        )}
+    <section className="gis-import-panel" data-testid="gpkg-import-panel">
+      <div className="gis-import-steps" aria-label="导入步骤">
+        <span data-current={!preview && phase !== "success"}>01 选择文件</span>
+        <span data-current={Boolean(preview && phase !== "confirming")}>02 预检</span>
+        <span data-current={confirming || phase === "success"}>03 写入工程</span>
       </div>
 
-      {statusLabel ? (
-        <p
-          className={cn("mb-2 text-[11px] font-medium text-slate-700", hasHiddenError && "hidden")}
-          role="status"
-          data-testid="gpkg-status"
-        >
+      <div className="gis-form">
+        <label>{COPY.gpkgPackageCode}
+          <input
+            type="text"
+            className="fm-input"
+            data-testid="gpkg-package-code"
+            value={packageCode}
+            onChange={(event) => onPackageCodeChange(event.target.value)}
+            disabled={busy || packageCodeLocked}
+            maxLength={100}
+            autoComplete="off"
+          />
+        </label>
+
+        <label className="gis-upload">
+          <FileUp size={20} aria-hidden="true" />
+          <span>{file?.name || COPY.gpkgSelectFile}</span>
+          <small>{file ? formatBytes(file.size) : "工程空间数据包（.gpkg）"}</small>
+          <input
+            ref={fileRef}
+            data-testid="gpkg-file-input"
+            type="file"
+            accept=".gpkg,application/geopackage+sqlite3,application/octet-stream"
+            aria-label={COPY.gpkgSelectFile}
+            disabled={busy}
+            onChange={(event) => {
+              const selected = event.target.files?.[0] ?? null;
+              event.target.value = "";
+              onPickFile(selected);
+            }}
+          />
+        </label>
+      </div>
+
+      {busy && <OperationStatus detail={confirming ? "正在写入已确认的图层和工程对象。" : "正在读取文件与图层信息。"}>
+        {confirming ? "正在导入工程对象" : jsonImporting ? "正在读取设计包" : "正在预检设计图"}
+      </OperationStatus>}
+      {statusLabel && (
+        <p className={hasError ? "gis-record-error" : "gis-import-feedback"} role="status" data-testid="gpkg-status">
           {statusLabel}
         </p>
-      ) : null}
-      {message ? (
-        <p
-          className={cn("mb-2 text-[11px] leading-4 text-slate-600", hasHiddenError && "hidden")}
-          data-testid="gpkg-message"
-        >
-          {message}
-        </p>
-      ) : null}
+      )}
+      {message && <p className="gis-import-feedback" data-testid="gpkg-message">{message}</p>}
 
-      {preview ? (
-        <div
-          className={cn(
-            "space-y-2 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-[11px] text-slate-700",
-            !preview.valid && "hidden",
-          )}
-          data-testid="gpkg-preview-card"
-        >
-          <div className="flex flex-wrap gap-x-3 gap-y-1 break-all">
-            <span>
-              文件：{file?.name || "—"}（{formatBytes(preview.size_bytes)}）
-            </span>
-            <span>编号：{preview.package_code}</span>
-            <span>对象数：{preview.candidate_count}</span>
-            <span>指纹：{shortFingerprint(preview.source_sha256)}</span>
-            <span>凭证有效至：{formatExpiry(preview.expires_at_unix)}</span>
-          </div>
-          <div>
-            <p className="mb-1 font-medium text-slate-800">图层</p>
-            <ul className="max-h-40 space-y-1 overflow-y-auto">
-              {(preview.layers_summary || []).map((layer) => (
-                <li key={layer.name} className="rounded-lg bg-white px-2 py-1">
-                  <span className="font-medium">{layer.name}</span>
-                  {" · "}
-                  {layer.accepted ? "可导入" : "不导入"}
-                  {layer.resolved_epsg != null ? ` · EPSG:${layer.resolved_epsg}` : ""}
-                  {layer.feature_count != null ? ` · ${layer.feature_count} 条` : ""}
-                  {layer.rejection_reasons?.length
-                    ? ` · ${layer.rejection_reasons.join(", ")}`
-                    : ""}
+      {preview && (
+        <div className="gis-import-preview" data-testid="gpkg-preview-card">
+          <dl className="gis-data">
+            <div><dt>设计包</dt><dd>{preview.package_code}</dd></div>
+            <div><dt>工程对象</dt><dd>{preview.candidate_count} 个</dd></div>
+          </dl>
+          {layers.length > 0 && (
+            <ul className="gis-import-layers" aria-label="预检图层">
+              {layers.map((layer) => (
+                <li key={layer.name}>
+                  <span>{layer.name}</span>
+                  <span>{layer.accepted ? "可导入" : "已排除"}{layer.feature_count == null ? "" : ` · ${layer.feature_count} 条`}</span>
                 </li>
               ))}
             </ul>
-          </div>
-          {preview.warnings?.length ? (
-            <p className="text-amber-800">警告：{preview.warnings.join("；")}</p>
-          ) : null}
-          {preview.errors?.length ? (
-            <p className="text-rose-800">阻断：{preview.errors.join("；")}</p>
-          ) : null}
-
-          <details open={techOpen} onToggle={(e) => setTechOpen((e.target as HTMLDetailsElement).open)}>
-            <summary className="cursor-pointer text-sky-800">
-              {COPY.techDetails} / {COPY.gpkgDataSource}
-            </summary>
-            <div className="mt-1 space-y-1 break-all rounded-xl bg-white p-2 text-[10px] text-slate-600">
-              <p>完整摘要：{preview.source_sha256 || "—"}</p>
-              <p>契约版本：{preview.import_contract_version}</p>
-              <p>来源分类：{preview.source_classification || COPY.gpkgSourceClassSample}</p>
-              <p>错误码：{preview.error_code || "—"}</p>
-              <p>{COPY.gpkgTruthBoundary}</p>
-            </div>
+          )}
+          {preview.warnings.length > 0 && <p className="gis-import-feedback">预检提醒 {preview.warnings.length} 项</p>}
+          <details className="gis-disclosure">
+            <summary>预检详情</summary>
+            <dl className="gis-data">
+              <div><dt>预检有效至</dt><dd>{formatExpiry(preview.expires_at_unix)}</dd></div>
+              <div><dt>来源核验</dt><dd>{preview.source_classification === "sample_or_unverified" ? "待核验" : "见导入资料"}</dd></div>
+            </dl>
+            <pre>{JSON.stringify({
+              layers,
+              errors: preview.errors,
+              warnings: preview.warnings,
+              fingerprint: preview.source_sha256,
+            }, null, 2)}</pre>
           </details>
         </div>
-      ) : null}
+      )}
 
-      <details
-        className="mt-3"
-        data-testid="gpkg-json-compat"
-        open={jsonOpen}
-        onToggle={(e) => setJsonOpen((e.target as HTMLDetailsElement).open)}
-      >
-        <summary className="cursor-pointer text-[11px] font-medium text-slate-600">
-          {COPY.gpkgCompatibleFormats}
-        </summary>
-        <div className="mt-2 rounded-2xl border border-slate-100 bg-slate-50 p-3">
-          <p className="mb-2 text-[11px] text-slate-500">{COPY.gpkgJsonCompatHelp}</p>
-          <label className="flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white px-3 py-2 text-xs text-slate-700">
-            {jsonImporting ? "导入中…" : "选择 JSON 兼容包"}
-            <input
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              data-testid="gpkg-json-input"
-              disabled={!projectId || jsonImporting || disabled}
-              onChange={(e) => {
-                const f = e.target.files?.[0] ?? null;
-                e.target.value = "";
-                void onJsonCompat(f);
-              }}
-            />
-          </label>
-        </div>
+      <div className="gis-actions gis-import-actions">
+        {phase === "preview_ready" && preview?.valid ? (
+          <>
+            <button type="button" className="fm-button" onClick={resetToIdle}>{COPY.gpkgReupload}</button>
+            <button type="button" className="fm-button fm-button-primary" data-testid="gpkg-confirm-btn" disabled={!canConfirm} onClick={() => void onConfirm()}>
+              <Check size={15} aria-hidden="true" /> {COPY.gpkgConfirmImport}
+            </button>
+          </>
+        ) : (
+          <>
+            {(hasError || phase === "success") && <button type="button" className="fm-button" data-testid="gpkg-reupload-btn" onClick={resetToIdle}>{COPY.gpkgReupload}</button>}
+            <button type="button" className="fm-button fm-button-primary" data-testid="gpkg-precheck-btn" disabled={!canPrecheck} onClick={() => void onPrecheck()}>
+              {phase === "uploading" ? COPY.gpkgUploading : confirming ? COPY.gpkgConfirming : COPY.gpkgRunPrecheck}
+            </button>
+          </>
+        )}
+      </div>
+
+      <details className="gis-disclosure" data-testid="gpkg-json-compat">
+        <summary>{COPY.gpkgCompatibleFormats}</summary>
+        <label className="gis-upload">
+          <FileUp size={17} aria-hidden="true" />
+          <span>{jsonImporting ? "正在导入…" : "选择兼容设计包（.json）"}</span>
+          <input
+            type="file"
+            accept="application/json,.json"
+            aria-label="选择兼容设计包"
+            data-testid="gpkg-json-input"
+            disabled={!projectId || busy}
+            onChange={(event) => {
+              const selected = event.target.files?.[0] ?? null;
+              event.target.value = "";
+              void onJsonCompat(selected);
+            }}
+          />
+        </label>
       </details>
     </section>
   );

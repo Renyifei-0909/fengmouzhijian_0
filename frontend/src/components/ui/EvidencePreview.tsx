@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useState } from "react";
-import { CameraIcon, CheckIcon, InfoIcon, ShieldIcon, XIcon } from "../Icons";
+import { CameraIcon, CheckIcon, InfoIcon, XIcon } from "../Icons";
 import { api, EvidenceObjectUrl } from "../../lib/api";
+import { friendlyApiError } from "../../lib/productCopy";
 
 type EvidencePreviewProps = {
   evidenceId: string;
@@ -37,6 +38,7 @@ const EvidencePreviewSession: React.FC<EvidencePreviewProps> = ({
 }) => {
   const isLargeEvidence = typeof registeredSizeBytes === "number"
     && registeredSizeBytes > DEFAULT_EVIDENCE_PREVIEW_LIMIT_BYTES;
+  const hasEvidence = !!evidenceId && evidenceId !== "pending";
   const warningTitleId = useId();
   const warningDescriptionId = useId();
   const [requestVersion, setRequestVersion] = useState(autoLoad && !isLargeEvidence ? 1 : 0);
@@ -98,32 +100,29 @@ const EvidencePreviewSession: React.FC<EvidencePreviewProps> = ({
     : content?.contentType === "image/jpeg" || content?.contentType === "image/png"
       ? "image"
       : "unsupported";
+  const title = originalName || "现场影像";
+  const displayError = error ? friendlyApiError(error) : "";
 
   return (
     <figure
       aria-busy={loading}
-      className="overflow-hidden rounded-[24px] border border-white/10 bg-[#0a1c33] text-white shadow-[0_22px_70px_-42px_rgba(2,132,199,.9)]"
+      className="min-w-0 overflow-hidden rounded-md border border-[#25435c] bg-[#0b2036] text-[#e2edf6]"
     >
-      <div className="flex flex-col gap-3 border-b border-white/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center justify-between gap-3 border-b border-[#25435c] px-3.5 py-2.5">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-xs font-semibold text-cyan-200">
-            <ShieldIcon className="h-4 w-4" /> 服务端证据预览
-          </div>
-          <p className="mt-1 truncate text-sm font-medium text-white">
-            {originalName || evidenceId}
-          </p>
+          <p className="truncate text-sm font-medium" title={title}>{title}</p>
         </div>
         {content ? (
-          <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-[11px] font-semibold text-emerald-200 sm:self-auto">
-            <CheckIcon className="h-3.5 w-3.5" /> 服务端原件 / 摘要已校验
+          <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-200">
+            <CheckIcon className="h-3.5 w-3.5" /> 原件已校验
           </span>
         ) : null}
       </div>
 
-      <div className="relative flex min-h-52 items-center justify-center bg-[radial-gradient(circle_at_center,rgba(14,165,233,.13),transparent_58%)] sm:min-h-72">
-        {requestVersion === 0 && isLargeEvidence && !largeFileConfirmed ? (
+      <div className="relative flex min-h-44 items-center justify-center bg-[#061526]">
+        {hasEvidence && requestVersion === 0 && isLargeEvidence && !largeFileConfirmed ? (
           <div
-            className="mx-4 w-full max-w-xl rounded-[22px] border border-amber-300/25 bg-amber-300/10 p-4 text-left sm:mx-6 sm:p-5"
+            className="m-4 w-full max-w-xl rounded-md border border-amber-300/25 bg-amber-300/10 p-4 text-left"
             role="alert"
             aria-labelledby={warningTitleId}
             aria-describedby={warningDescriptionId}
@@ -131,9 +130,9 @@ const EvidencePreviewSession: React.FC<EvidencePreviewProps> = ({
             <div className="flex items-start gap-3">
               <InfoIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
               <div className="min-w-0">
-                <p id={warningTitleId} className="text-sm font-semibold text-amber-100">大文件自动预览已暂停</p>
+                <p id={warningTitleId} className="text-sm font-semibold text-amber-100">大文件预览</p>
                 <p id={warningDescriptionId} className="mt-2 text-xs leading-5 text-amber-100/75">
-                  服务端登记大小为 {formatBytes(registeredSizeBytes ?? 0)}，超过 64 MiB 保护阈值。当前鉴权方案会把完整媒体载入浏览器内存，可能造成页面卡顿或崩溃。
+                  该文件大小为 {formatBytes(registeredSizeBytes ?? 0)}。打开预览需先加载完整文件。
                 </p>
                 <button
                   type="button"
@@ -141,42 +140,46 @@ const EvidencePreviewSession: React.FC<EvidencePreviewProps> = ({
                     setLargeFileConfirmed(true);
                     setRequestVersion((value) => value + 1);
                   }}
-                  className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-300 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-100 sm:w-auto"
+                  className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-md border border-amber-300/40 px-3 py-2 text-sm font-medium text-amber-100 hover:bg-amber-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-100"
                 >
-                  <CameraIcon className="h-4 w-4" /> 我已了解内存风险，仍要加载
+                  <CameraIcon className="h-4 w-4" /> 加载预览
                 </button>
               </div>
             </div>
           </div>
         ) : null}
 
-        {requestVersion === 0 && !isLargeEvidence ? (
+        {hasEvidence && requestVersion === 0 && !isLargeEvidence ? (
           <button
             type="button"
             onClick={() => setRequestVersion(1)}
-            className="mx-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-cyan-300/30 bg-cyan-300/10 px-5 py-3 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+            className="mx-4 inline-flex min-h-9 items-center gap-2 rounded-md border border-cyan-300/30 bg-cyan-300/10 px-3 py-2 text-sm font-medium text-cyan-100 hover:bg-cyan-300/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
           >
-            <CameraIcon className="h-4 w-4" /> 鉴权加载原始证据
+            <CameraIcon className="h-4 w-4" /> 查看原件
           </button>
         ) : null}
+        {!hasEvidence ? <p className="text-sm text-[#a2b7cb]">暂无现场影像</p> : null}
 
         {loading ? (
           <div className="flex flex-col items-center px-5 text-center" role="status">
             <span className="h-8 w-8 animate-spin rounded-full border-2 border-sky-300/25 border-t-sky-300" />
-            <p className="mt-3 text-sm font-medium text-slate-200">正在从服务端安全读取原件…</p>
-            <p className="mt-1 text-xs text-slate-400">API Key 仅通过请求头发送</p>
+            <p className="mt-3 text-sm font-medium text-slate-200">正在读取原件…</p>
           </div>
         ) : null}
 
         {error ? (
-          <div className="mx-5 max-w-lg rounded-2xl border border-rose-300/20 bg-rose-300/10 p-4 text-center" role="alert">
+          <div className="m-4 max-w-lg rounded-md border border-rose-300/20 bg-rose-300/10 p-4 text-center" role="alert">
             <XIcon className="mx-auto h-5 w-5 text-rose-300" />
             <p className="mt-2 text-sm font-semibold text-rose-100">无法读取原始证据</p>
-            <p className="mt-1 break-words text-xs leading-5 text-rose-200/80">{error}</p>
+            <p className="mt-1 break-words text-xs leading-5 text-rose-200/80">{displayError}</p>
+            {displayError !== error ? <details className="mt-2 text-xs text-rose-200/80">
+              <summary className="cursor-pointer">查看原因</summary>
+              <p className="mt-1 break-words">{error}</p>
+            </details> : null}
             <button
               type="button"
               onClick={() => setRequestVersion((value) => value + 1)}
-              className="mt-3 rounded-xl bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+              className="mt-3 rounded-md bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
             >
               重新加载
             </button>
@@ -190,7 +193,7 @@ const EvidencePreviewSession: React.FC<EvidencePreviewProps> = ({
             controls
             playsInline
             preload="metadata"
-            aria-label={`原始证据视频：${originalName || evidenceId}`}
+            aria-label={title}
           >
             <source src={content.url} type={content.contentType} />
             当前浏览器无法播放该视频。
@@ -200,7 +203,7 @@ const EvidencePreviewSession: React.FC<EvidencePreviewProps> = ({
         {content && mediaKind === "image" ? (
           <img
             src={content.url}
-            alt={`原始施工证据：${originalName || evidenceId}`}
+            alt={title}
             className="max-h-[32rem] w-full object-contain"
           />
         ) : null}
@@ -209,22 +212,23 @@ const EvidencePreviewSession: React.FC<EvidencePreviewProps> = ({
           <div className="px-5 text-center">
             <InfoIcon className="mx-auto h-6 w-6 text-amber-300" />
             <p className="mt-2 text-sm font-semibold text-amber-100">浏览器不支持内嵌预览此格式</p>
-            <p className="mt-1 text-xs text-slate-400">{content.contentType}</p>
           </div>
         ) : null}
       </div>
 
-      <figcaption className="grid gap-3 px-4 py-3 text-[11px] leading-5 text-slate-400 sm:grid-cols-[1fr_auto] sm:items-end">
-        <div className="min-w-0">
-          <p className="break-all font-mono">证据 ID · {evidenceId}</p>
-          {sha256 ? <p className="mt-1 break-all font-mono">SHA-256 · {sha256}</p> : null}
-        </div>
-        <div className="sm:text-right">
-          {typeof registeredSizeBytes === "number" ? <p>登记大小 · {formatBytes(registeredSizeBytes)}</p> : null}
-          {content ? <p>{content.contentType} · {formatBytes(content.sizeBytes)}</p> : null}
-          <p>本地演示会完整载入 Blob，非生产级 Range 流播放</p>
-        </div>
-      </figcaption>
+      {hasEvidence ? (
+        <figcaption className="border-t border-[#25435c] px-3.5 py-2 text-xs leading-5 text-[#a2b7cb]">
+          <details>
+            <summary className="cursor-pointer">证据详情</summary>
+            <dl className="mt-2 grid gap-x-4 gap-y-1 [grid-template-columns:auto_minmax(0,1fr)]">
+              <dt>证据编号</dt><dd className="break-all">{evidenceId}</dd>
+              {sha256 ? <><dt>证据摘要</dt><dd className="break-all font-mono">{sha256}</dd></> : null}
+              {typeof registeredSizeBytes === "number" ? <><dt>登记大小</dt><dd>{formatBytes(registeredSizeBytes)}</dd></> : null}
+              {content ? <><dt>媒体格式</dt><dd className="break-words">{content.contentType} · {formatBytes(content.sizeBytes)}</dd></> : null}
+            </dl>
+          </details>
+        </figcaption>
+      ) : null}
     </figure>
   );
 };

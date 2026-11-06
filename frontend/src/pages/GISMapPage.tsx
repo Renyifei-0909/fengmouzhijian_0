@@ -1,813 +1,676 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router";
-import {
-  api,
-  ApiRequestError,
-  DesignPackage,
-  EngineeringObject,
-  ProjectGisSummary,
-  WorkOrder,
-} from "../lib/api";
-import { GeoMap, QgisDesignObject } from "../components/gis/GeoMap";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
+import { Link, useLocation, useSearchParams } from "react-router";
+import { FileUp, Layers, ListChecks, MapPin, Plus, RefreshCw, Search, X } from "lucide-react";
+import { api, ApiRequestError } from "../lib/api";
+import type { DesignPackage, EngineeringObject, ProjectGisSummary, StandardGpkgImportResult, WorkOrder } from "../lib/api";
+import { GeoMap } from "../components/gis/GeoMap";
+import type { CaptureMarker, QgisDesignObject } from "../components/gis/GeoMap";
 import { GpkgImportPanel } from "../components/gis/GpkgImportPanel";
 import { WorkOrderCapturePanel } from "../components/gis/WorkOrderCapturePanel";
+import { Modal } from "../components/ui/Modal";
 import { Notice } from "../components/ui/Notice";
-import { cn } from "../utils/cn";
+import { FieldScene } from "../components/ui/FieldScene";
 import {
-  MapIcon,
-  ProjectIcon,
-  ShieldIcon,
-  InfoIcon,
-  ChevronRightIcon,
-} from "../components/Icons";
-import {
-  COMMERCIAL_SAMPLE_PROJECT_CODE,
   COPY,
   friendlyApiError,
   labelImportStatus,
   labelObjectType,
   labelWorkOrderStatus,
   WORK_ORDER_STATUS_LABEL,
+  projectDisplayName,
+  engineeringObjectDisplayName,
 } from "../lib/productCopy";
+import { formatWorkbenchTime } from "../components/gis/workbenchTime";
+import { serviceTimestamp } from "../lib/serviceTime";
+import "../components/gis/workbench.css";
 
-export const GISMapPage: React.FC = () => {
+const EMPTY_OBJECTS: EngineeringObject[] = [];
+const EMPTY_ORDERS: WorkOrder[] = [];
+const ONLINE_STYLE_URL = import.meta.env.VITE_MAP_STYLE_URL?.trim() || null;
+
+type ProjectData = {
+  summary: ProjectGisSummary;
+  packages: DesignPackage[];
+};
+
+type ProjectResource = {
+  id: string;
+  data?: ProjectData;
+  loading: boolean;
+  error?: string;
+};
+
+type Dialog = { kind: "import" | "create" | "capture"; locationKey: string };
+
+const describeError = (error: unknown, fallback: string) =>
+  error instanceof ApiRequestError ? friendlyApiError(error.message) : fallback;
+
+export function GISMapPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [projects, setProjects] = useState<Awaited<ReturnType<typeof api.listProjects>>>([]);
-  const [projectId, setProjectId] = useState<string>(searchParams.get("project") || "");
-  const [summary, setSummary] = useState<ProjectGisSummary | null>(null);
-  const [packages, setPackages] = useState<DesignPackage[]>([]);
-  const [selectedObjectId, setSelectedObjectId] = useState<string | null>(
-    searchParams.get("object") || null,
-  );
-  const [selectedWorkOrderId, setSelectedWorkOrderId] = useState<string | null>(
-    searchParams.get("workOrder") || null,
-  );
-  const [statusFilter, setStatusFilter] = useState<string>("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [errorDetail, setErrorDetail] = useState<string | null>(null);
-  const [hasSelectedGpkg, setHasSelectedGpkg] = useState(false);
-  const [selectedQgisObject, setSelectedQgisObject] = useState<QgisDesignObject | null>(null);
-  const [notice, setNotice] = useState("");
-  const [creatingWo, setCreatingWo] = useState(false);
-  const [mobileTab, setMobileTab] = useState<"map" | "objects" | "orders">("map");
-  const [dataNoteOpen, setDataNoteOpen] = useState(false);
-  const [importNoteOpen, setImportNoteOpen] = useState<string | null>(null);
-  const [objectTechOpen, setObjectTechOpen] = useState(false);
+  const { key: locationKey } = useLocation();
+  const projectId = searchParams.get("project") ?? "";
+  const objectId = searchParams.get("object");
+  const orderId = searchParams.get("workOrder");
 
-  const [woCode, setWoCode] = useState("");
-  const [procedureCode, setProcedureCode] = useState("TRENCH-BEFORE-BACKFILL");
-  const [toleranceM, setToleranceM] = useState("50");
-  const [gpsThresholdM, setGpsThresholdM] = useState("30");
-  const [assignedTo, setAssignedTo] = useState("现场采集");
+  const [projects, setProjects] = useState<Awaited<ReturnType<typeof api.listProjects>> | null>(null);
+  const [projectsError, setProjectsError] = useState("");
+  const [resource, setResource] = useState<ProjectResource | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [allOrders, setAllOrders] = useState(false);
+  const [dialog, setDialog] = useState<Dialog | null>(null);
+  const [reference, setReference] = useState<{ object: QgisDesignObject; locationKey: string } | null>(null);
+  const [marker, setMarker] = useState<{ orderId: string; position: CaptureMarker } | null>(null);
+  const [feedback, setFeedback] = useState<{ projectId: string; message: string; warning?: boolean } | null>(null);
+  const mounted = useRef(false);
+  const projectListRequest = useRef(0);
+  const projectRequest = useRef(0);
+  const importSaving = useRef<string | null>(null);
+  const current = useRef({ projectId, locationKey });
+  useLayoutEffect(() => { current.current = { projectId, locationKey }; }, [projectId, locationKey]);
 
-  const [captureMarker, setCaptureMarker] = useState<{
-    longitude: number;
-    latitude: number;
-    synthetic: boolean;
-  } | null>(null);
-
-  const onlineStyleUrl =
-    (import.meta.env.VITE_MAP_STYLE_URL as string | undefined)?.trim() || null;
-
-  const setFriendlyError = (raw: string) => {
-    setError(friendlyApiError(raw));
-    setErrorDetail(raw);
-  };
+  const currentResource = resource?.id === projectId ? resource : null;
+  const data = currentResource?.data;
+  const objects = data?.summary.objects ?? EMPTY_OBJECTS;
+  const workOrders = data?.summary.work_orders ?? EMPTY_ORDERS;
+  const selectedProject = projects?.find((project) => project.id === projectId);
+  const selectedWorkOrder = workOrders.find((order) => order.id === orderId);
+  const selectedObject = objects.find((object) => object.id === (selectedWorkOrder?.engineering_object_id ?? objectId));
+  const selectedReference = reference?.locationKey === locationKey ? reference.object : null;
+  const activeDialog = dialog?.locationKey === locationKey ? dialog.kind : null;
+  const query = search.trim().toLocaleLowerCase();
+  const filteredObjects = query
+    ? objects.filter((object) => [object.name, engineeringObjectDisplayName(object.name), object.object_code, labelObjectType(object.object_type)]
+        .some((value) => value.toLocaleLowerCase().includes(query)))
+    : objects;
+  const filteredOrders = workOrders.filter((order) =>
+    (allOrders || !selectedObject || order.engineering_object_id === selectedObject.id)
+      && (!statusFilter || order.status === statusFilter));
+  const loading = !projects || Boolean(!projectId && projects.length)
+    || Boolean(selectedProject && (!currentResource || currentResource.loading));
 
   const loadProjects = useCallback(async () => {
+    const request = ++projectListRequest.current;
+    setProjectsError("");
     try {
       const rows = await api.listProjects();
-      setProjects(rows);
-      if (!projectId && rows.length > 0) {
-        const preferred =
-          rows.find((p) => p.code === COMMERCIAL_SAMPLE_PROJECT_CODE) || rows[0];
-        setProjectId(preferred.id);
-      }
-      if (rows.length === 0) {
-        setError(null);
-        setErrorDetail(null);
-        setNotice(COPY.emptyProjects);
-      }
-    } catch (err) {
-      setProjects([]);
-      const raw = err instanceof ApiRequestError ? err.message : COPY.loadFailed;
-      setFriendlyError(raw);
+      if (request === projectListRequest.current) setProjects(rows);
+    } catch (error) {
+      if (request === projectListRequest.current) setProjectsError(describeError(error, "无法读取项目列表"));
     }
-  }, [projectId]);
+  }, []);
 
   const loadProjectData = useCallback(async (id: string) => {
-    if (!id) {
-      setSummary(null);
-      setPackages([]);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    setErrorDetail(null);
+    if (!mounted.current || current.current.projectId !== id) return;
+    const request = ++projectRequest.current;
+    setResource((previous) => ({
+      id,
+      data: previous?.id === id ? previous.data : undefined,
+      loading: true,
+    }));
     try {
-      const [gis, pkgs] = await Promise.all([
-        api.projectGisSummary(id),
-        api.listDesignPackages(id),
-      ]);
-      setSummary(gis);
-      setPackages(pkgs);
-      setSelectedObjectId((prev) => {
-        if (prev && gis.objects.some((o) => o.id === prev)) return prev;
-        return gis.objects[0]?.id ?? null;
+      const [summary, packages] = await Promise.all([api.projectGisSummary(id), api.listDesignPackages(id)]);
+      if (request !== projectRequest.current || current.current.projectId !== id) return;
+      setResource((previous) => {
+        const previousOrders = previous?.id === id ? previous.data?.summary.work_orders : undefined;
+        const latestOrders = new Map(previousOrders?.map((order) => [order.id, order]));
+        const orders = summary.work_orders.map((order) => {
+          const latest = latestOrders.get(order.id);
+          return latest && serviceTimestamp(latest.updated_at) > serviceTimestamp(order.updated_at) ? latest : order;
+        });
+        return { id, data: { summary: { ...summary, work_orders: orders }, packages }, loading: false };
       });
-      setSelectedWorkOrderId((prev) => {
-        if (prev && gis.work_orders.some((w) => w.id === prev)) return prev;
-        return null;
-      });
-    } catch (err) {
-      setSummary(null);
-      setPackages([]);
-      setFriendlyError(err instanceof ApiRequestError ? err.message : COPY.loadFailed);
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      if (request !== projectRequest.current || current.current.projectId !== id) return;
+      setResource((previous) => ({
+        id,
+        data: previous?.id === id ? previous.data : undefined,
+        loading: false,
+        error: describeError(error, "无法读取工程资料"),
+      }));
     }
   }, []);
 
   useEffect(() => {
+    mounted.current = true;
     void loadProjects();
+    return () => {
+      mounted.current = false;
+      projectListRequest.current += 1;
+    };
   }, [loadProjects]);
 
   useEffect(() => {
-    if (!projectId) return;
-    setHasSelectedGpkg(false);
-    setSelectedQgisObject(null);
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("project", projectId);
-        if (selectedObjectId) next.set("object", selectedObjectId);
-        else next.delete("object");
-        if (selectedWorkOrderId) next.set("workOrder", selectedWorkOrderId);
-        else next.delete("workOrder");
+    if (projectId || !projects?.length) return;
+    const preferred = projects[0];
+    let active = true;
+    const resolve = async () => {
+      let linkedProjectId: string | undefined;
+      try {
+        if (orderId) linkedProjectId = (await api.getWorkOrder(orderId)).project_id;
+        else if (objectId) linkedProjectId = (await api.getEngineeringObject(objectId)).project_id;
+      } catch {
+        // An unavailable link opens the default project.
+      }
+      if (!active || current.current.projectId) return;
+      const target = projects.find((project) => project.id === linkedProjectId) ?? preferred;
+      setSearchParams((previous) => {
+        const next = new URLSearchParams(previous);
+        next.set("project", target.id);
         return next;
-      },
-      { replace: true },
-    );
-    void loadProjectData(projectId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, loadProjectData]);
+      }, { replace: true });
+    };
+    void resolve();
+    return () => { active = false; };
+  }, [projectId, objectId, orderId, projects, setSearchParams]);
 
   useEffect(() => {
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (selectedObjectId) next.set("object", selectedObjectId);
-        else next.delete("object");
-        if (selectedWorkOrderId) next.set("workOrder", selectedWorkOrderId);
-        else next.delete("workOrder");
-        return next;
-      },
-      { replace: true },
-    );
-  }, [selectedObjectId, selectedWorkOrderId, setSearchParams]);
+    if (!selectedProject) return;
+    void loadProjectData(selectedProject.id);
+    return () => { projectRequest.current += 1; };
+  }, [selectedProject, loadProjectData]);
 
-  const selectedObject: EngineeringObject | null = useMemo(() => {
-    if (!summary || !selectedObjectId) return null;
-    return summary.objects.find((o) => o.id === selectedObjectId) ?? null;
-  }, [summary, selectedObjectId]);
+  useEffect(() => {
+    if (!data || currentResource?.loading || currentResource?.error) return;
+    const nextObjectId = selectedObject?.id ?? null;
+    const nextOrderId = selectedWorkOrder?.id ?? null;
+    if (objectId === nextObjectId && orderId === nextOrderId) return;
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (nextObjectId) next.set("object", nextObjectId);
+      else next.delete("object");
+      if (nextOrderId) next.set("workOrder", nextOrderId);
+      else next.delete("workOrder");
+      return next;
+    }, { replace: true });
+  }, [data, currentResource, objectId, orderId, selectedObject, selectedWorkOrder, setSearchParams]);
 
-  const selectedWorkOrder: WorkOrder | null = useMemo(() => {
-    if (!summary || !selectedWorkOrderId) return null;
-    return summary.work_orders.find((w) => w.id === selectedWorkOrderId) ?? null;
-  }, [summary, selectedWorkOrderId]);
+  useEffect(() => {
+    setDialog(null);
+    setReference(null);
+    importSaving.current = null;
+  }, [locationKey]);
 
-  const filteredWorkOrders = useMemo(() => {
-    let list = summary?.work_orders ?? [];
-    if (selectedObjectId) {
-      list = list.filter((w) => w.engineering_object_id === selectedObjectId);
-    }
-    if (statusFilter) list = list.filter((w) => w.status === statusFilter);
-    return list;
-  }, [summary, selectedObjectId, statusFilter]);
-
-  const hasSampleData = packages.some((p) => p.synthetic);
-
-  const onGpkgImported = async (result: {
-    package: DesignPackage;
-    objects: EngineeringObject[];
-  }) => {
-    setError(null);
-    setErrorDetail(null);
-    setNotice(
-      `已导入 ${result.package.package_code}，工程对象 ${result.package.object_count} 个。`,
-    );
-    await loadProjectData(projectId);
-    const focusId = result.objects[0]?.id;
-    if (focusId) {
-      setSelectedObjectId(focusId);
-      setMobileTab("map");
-    }
+  const changeSelection = (nextObjectId: string | null, nextOrderId: string | null) => {
+    setReference(null);
+    setMarker(null);
+    if (nextObjectId === objectId && nextOrderId === orderId) return;
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (nextObjectId) next.set("object", nextObjectId);
+      else next.delete("object");
+      if (nextOrderId) next.set("workOrder", nextOrderId);
+      else next.delete("workOrder");
+      return next;
+    });
   };
 
-  const onCreateWorkOrder = async () => {
-    if (!projectId || !selectedObject) {
-      setFriendlyError(COPY.selectObjectFirst);
-      return;
-    }
-    const code = woCode.trim() || `${selectedObject.object_code}-WO-1`;
-    const tol = Number(toleranceM);
-    const thr = Number(gpsThresholdM);
-    if (!Number.isFinite(tol) || tol <= 0) {
-      setFriendlyError(`${COPY.fieldSpatialTolerance}须为正数（${COPY.unitMeters}）`);
-      return;
-    }
-    if (!Number.isFinite(thr) || thr <= 0) {
-      setFriendlyError(`${COPY.fieldGpsAccuracy}须为正数（${COPY.unitMeters}）`);
-      return;
-    }
-    setCreatingWo(true);
-    setError(null);
-    setErrorDetail(null);
-    try {
-      const wo = await api.createWorkOrder(projectId, {
-        engineering_object_id: selectedObject.id,
-        work_order_code: code,
-        procedure_code: procedureCode.trim() || undefined,
-        spatial_tolerance_m: tol,
-        gps_accuracy_threshold_m: thr,
-        assigned_to: assignedTo.trim() || undefined,
-        notes: "工程作业台创建",
-      });
-      // Backend creates work orders in `draft`; evidence upload requires `assigned`.
-      // Assign right away so the capture panel can accept field evidence (fix: draft never uploaded).
-      if (assignedTo.trim()) {
-        await api.assignWorkOrder(wo.id, assignedTo.trim());
-      }
-      setNotice(`已创建施工工单 ${wo.work_order_code}`);
-      setWoCode("");
-      await loadProjectData(projectId);
-      setSelectedWorkOrderId(wo.id);
-      setMobileTab("orders");
-    } catch (err) {
-      setFriendlyError(err instanceof ApiRequestError ? err.message : "创建工单失败");
-    } finally {
-      setCreatingWo(false);
-    }
+  const changeProject = (id: string) => {
+    setSearch("");
+    setStatusFilter("");
+    setAllOrders(false);
+    setFeedback(null);
+    setMarker(null);
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set("project", id);
+      next.delete("object");
+      next.delete("workOrder");
+      return next;
+    });
   };
 
-  const onSelectObject = (objectId: string) => {
-    setSelectedQgisObject(null);
-    setSelectedObjectId(objectId);
-    const linked = summary?.work_orders.find((w) => w.engineering_object_id === objectId);
-    if (linked) setSelectedWorkOrderId(linked.id);
-    setMobileTab("objects");
+  const selectObject = (id: string) => {
+    setAllOrders(false);
+    const linkedOrder = selectedWorkOrder?.engineering_object_id === id
+      ? selectedWorkOrder
+      : workOrders.find((order) => order.engineering_object_id === id);
+    changeSelection(id, linkedOrder?.id ?? null);
   };
 
-  const selectedProject = projects.find((p) => p.id === projectId) ?? null;
-  const latestPackage = packages[0] ?? null;
-  const hasImportedMap = hasSelectedGpkg;
+  const setCaptureMarker = useCallback((position: CaptureMarker | null) => {
+    setMarker(orderId && position ? { orderId, position } : null);
+  }, [orderId]);
+
+  const updateOrder = useCallback((updated: WorkOrder) => {
+    if (!mounted.current || current.current.projectId !== updated.project_id) return;
+    setResource((previous) => {
+      if (previous?.id !== updated.project_id || !previous.data) return previous;
+      const { summary } = previous.data;
+      const orders = summary.work_orders;
+      const exists = orders.some((order) => order.id === updated.id);
+      const nextOrders = exists
+        ? orders.map((order) => order.id === updated.id && serviceTimestamp(order.updated_at) <= serviceTimestamp(updated.updated_at) ? updated : order)
+        : [updated, ...orders];
+      return {
+        ...previous,
+        data: {
+          ...previous.data,
+          summary: {
+            ...summary,
+            work_orders: nextOrders,
+            work_order_count: summary.work_order_count + (exists ? 0 : 1),
+          },
+        },
+      };
+    });
+  }, []);
+
+  const onImported = (result: StandardGpkgImportResult) => {
+    if (!mounted.current || current.current.projectId !== result.package.project_id) return;
+    setResource((previous) => {
+      if (!previous?.data || previous.id !== projectId) return previous;
+      const { summary, packages } = previous.data;
+      const imported = new Map(summary.objects.map((object) => [object.id, object]));
+      for (const object of result.objects) imported.set(object.id, object);
+      const hasPackage = packages.some((pkg) => pkg.id === result.package.id);
+      return {
+        ...previous,
+        data: {
+          packages: [result.package, ...packages.filter((pkg) => pkg.id !== result.package.id)],
+          summary: {
+            ...summary,
+            design_package_count: summary.design_package_count + (hasPackage ? 0 : 1),
+            engineering_object_count: imported.size,
+            objects: [...imported.values()],
+          },
+        },
+      };
+    });
+    if (current.current.locationKey === locationKey) {
+      setDialog(null);
+      const importedObject = result.objects[0];
+      if (importedObject) changeSelection(importedObject.id, null);
+    }
+    setFeedback({
+      projectId,
+      message: `已导入 ${result.package.package_code} · ${result.package.object_count} 个工程对象`,
+    });
+    void loadProjectData(projectId);
+  };
+
+  const onOrderSaved = (order: WorkOrder, warning?: string) => {
+    if (!mounted.current || current.current.projectId !== order.project_id) return;
+    updateOrder(order);
+    if (current.current.locationKey === locationKey) {
+      setDialog(null);
+      setStatusFilter("");
+      changeSelection(order.engineering_object_id, order.id);
+    }
+    setFeedback({
+      projectId: order.project_id,
+      message: warning || `已创建工单 ${order.work_order_code}`,
+      warning: Boolean(warning),
+    });
+    void loadProjectData(order.project_id);
+  };
+
+  const openDialog = (kind: Dialog["kind"]) => setDialog({ kind, locationKey });
+  const closeDialog = () => { if (importSaving.current !== locationKey) setDialog(null); };
+  const visibleError = projectsError || (projects && projectId && !selectedProject ? "未找到该项目，请重新选择。" : currentResource?.error);
 
   return (
-    <div className="space-y-4 page-enter">
-      <div className="flex flex-col gap-3 rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-slate-900">工程作业</h2>
-          <p className="mt-1 text-sm leading-6 text-slate-600">{COPY.engineeringIntro}</p>
-          {hasSampleData || latestPackage?.synthetic ? (
-            <span className="mt-2 inline-flex rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 text-[11px] font-medium text-violet-900">
-              {COPY.sampleDataBadge}
-            </span>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          onClick={() => setDataNoteOpen((v) => !v)}
-          className="shrink-0 rounded-2xl border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-        >
-          {COPY.dataNoteTitle}
-        </button>
-      </div>
-
-      {dataNoteOpen ? (
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-700">
-          <p>
-            · 设计数据来源：
-            {latestPackage
-              ? `${latestPackage.source_filename}（${latestPackage.synthetic ? "样例" : "受控"}）`
-              : "尚未导入"}
-          </p>
-          <p>· 是否样例数据：{latestPackage?.synthetic ? "是" : packages.length ? "否" : "—"}</p>
-          <p>· 导入时对敏感字段执行白名单脱敏，不直接暴露原始个人信息。</p>
-          <p>· 当前提供工程对象浏览与工单核验，不包含完整地理信息系统编辑能力。</p>
-          <p>· 位置核验仅判断采集位置合理性，不构成绝对防作弊证明。</p>
-          <details className="mt-2">
-            <summary className="cursor-pointer font-medium text-sky-800">{COPY.techDetails}</summary>
-            <pre className="mt-2 max-h-40 overflow-auto rounded-xl bg-white p-2 text-[10px]">
-              {JSON.stringify(
-                {
-                  packages: packages.map((p) => ({
-                    package_code: p.package_code,
-                    source_type: p.source_type,
-                    source_crs_epsg: p.source_crs_epsg,
-                    source_sha256: p.source_sha256,
-                    synthetic: p.synthetic,
-                    import_status: p.import_status,
-                    import_warnings: p.import_warnings,
-                  })),
-                  truth_note: summary?.truth_note,
-                },
-                null,
-                2,
-              )}
-            </pre>
-          </details>
-        </div>
-      ) : null}
-
-      <div className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <label className="block min-w-0 flex-1">
-            <span className="text-xs font-medium text-slate-500">{COPY.projectSelect}</span>
-            <select
-              className="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm"
-              value={projectId}
-              onChange={(e) => {
-                setProjectId(e.target.value);
-                setSelectedObjectId(null);
-                setSelectedWorkOrderId(null);
-                setSummary(null);
-              }}
-            >
-              {projects.length === 0 ? <option value="">{COPY.emptyProjects}</option> : null}
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
+    <div className="gis-workbench page-enter">
+      <div className="gis-page-head gis-project-toolbar">
+        <div className="gis-actions">
+          <label className="gis-project-field">
+            <span className="fm-label">当前项目</span>
+            <select className="fm-input" value={selectedProject?.id ?? ""} onChange={(event) => changeProject(event.target.value)}>
+              <option value="" disabled>{projects?.length ? "选择项目" : loading && !projectsError ? "正在读取项目" : "暂无项目"}</option>
+              {projects?.map((project) => <option key={project.id} value={project.id}>{projectDisplayName(project.name)}</option>)}
             </select>
           </label>
-          <div className="text-sm text-slate-600">
-            {selectedProject ? (
-              <>
-                <span className="font-semibold text-slate-900">{selectedProject.name}</span>
-                <span className="mx-2 text-slate-300">·</span>
-                <span className="text-xs text-slate-500">
-                  {COPY.projectCode} {selectedProject.code}
-                </span>
-              </>
-            ) : (
-              "未选择项目"
-            )}
-          </div>
+        </div>
+        <div className="gis-actions">
           <button
             type="button"
-            onClick={() => projectId && void loadProjectData(projectId)}
-            disabled={!projectId || loading}
-            className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-medium text-sky-700 disabled:opacity-50"
+            className="fm-button"
+            disabled={Boolean(loading && !visibleError)}
+            onClick={() => selectedProject ? void loadProjectData(selectedProject.id) : void loadProjects()}
           >
-            {loading ? "加载中…" : COPY.refresh}
+            <RefreshCw size={14} aria-hidden="true" /> 刷新
+          </button>
+          <button type="button" className="fm-button fm-button-primary" onClick={() => openDialog("import")} disabled={!selectedProject}>
+            <FileUp size={15} aria-hidden="true" /> 导入设计
           </button>
         </div>
-        {summary ? (
-          <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-            <div className="rounded-xl bg-slate-50 py-2">
-              {COPY.statsDesign} <strong>{summary.design_package_count}</strong>
-            </div>
-            <div className="rounded-xl bg-slate-50 py-2">
-              {COPY.statsObjects} <strong>{summary.engineering_object_count}</strong>
-            </div>
-            <div className="rounded-xl bg-slate-50 py-2">
-              {COPY.statsWorkOrders} <strong>{summary.work_order_count}</strong>
-            </div>
-          </div>
-        ) : null}
       </div>
 
-      {error ? (
-        <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-          <p>{error}</p>
-          {errorDetail && errorDetail !== error ? (
-            <details className="mt-2 text-xs">
-              <summary className="cursor-pointer">{COPY.techDetails}</summary>
-              <pre className="mt-1 whitespace-pre-wrap break-all">{errorDetail}</pre>
-            </details>
-          ) : null}
-        </div>
-      ) : null}
-      {notice ? <Notice type="info" message={notice} /> : null}
+      {visibleError && <Notice type="warning" message={visibleError} />}
+      {feedback?.projectId === projectId && (
+        <Notice type={feedback.warning ? "warning" : "success"} message={feedback.message} />
+      )}
 
-      <div className="flex gap-2 lg:hidden">
-        {(
-          [
-            ["map", "地图"],
-            ["objects", "对象/设计"],
-            ["orders", "工单/资料"],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setMobileTab(key)}
-            className={cn(
-              "flex-1 rounded-2xl border px-3 py-2 text-sm font-medium",
-              mobileTab === key
-                ? "border-sky-300 bg-sky-50 text-sky-800"
-                : "border-slate-200 bg-white text-slate-600",
+      <div className="fm-panel gis-workspace">
+        <aside className="gis-object-rail" aria-label="工程对象">
+          <div className="gis-section-head">
+            <h3><Layers size={15} aria-hidden="true" /> 工程对象</h3>
+            <span>{data?.summary.engineering_object_count ?? "—"}</span>
+          </div>
+          <label className="gis-search">
+            <Search size={14} aria-hidden="true" />
+            <input
+              aria-label="查找工程对象"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="名称或对象编号"
+            />
+          </label>
+          <ul className="gis-object-list">
+            {filteredObjects.map((object) => (
+              <li key={object.id}>
+                <button
+                  type="button"
+                  aria-pressed={selectedObject?.id === object.id && !selectedReference}
+                  onClick={() => selectObject(object.id)}
+                >
+                  <span className="gis-object-type">{labelObjectType(object.object_type)}</span>
+                  <strong>{engineeringObjectDisplayName(object.name || object.object_code)}</strong>
+                  {object.name && <small>{object.object_code}</small>}
+                </button>
+              </li>
+            ))}
+            {!filteredObjects.length && (
+              <li className="gis-empty">
+                {loading && !data && !projectsError ? "正在读取工程对象…" : query ? "未找到匹配对象" : "暂无工程对象"}
+              </li>
             )}
-          >
-            {label}
+          </ul>
+          <button type="button" className="gis-file-history" disabled={!selectedProject} onClick={() => openDialog("import")}>
+            导入记录 <span>{data?.summary.design_package_count ?? "—"}</span>
           </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(260px,0.85fr)_minmax(0,1.4fr)_minmax(300px,1fr)]">
-        <aside className={cn("space-y-4 xl:contents", mobileTab !== "objects" && "hidden lg:block")}>
-          <div className="space-y-4 xl:col-start-1 xl:row-start-1 xl:row-span-2">
-            {projectId ? (
-              <GpkgImportPanel
-                projectId={projectId}
-                disabled={loading}
-                onImported={(result) => void onGpkgImported(result)}
-                onFileSelected={() => setHasSelectedGpkg(true)}
-              />
-            ) : null}
-            <section className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm">
-            <div className="mb-3 flex items-center gap-2">
-              <ProjectIcon className="h-4 w-4 text-sky-600" />
-              <h3 className="text-sm font-semibold text-slate-900">{COPY.gpkgImportRecords}</h3>
-            </div>
-            <div className="max-h-52 space-y-2 overflow-y-auto">
-              {packages.map((pkg) => (
-                <div
-                  key={pkg.id}
-                  className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-[11px] leading-4 text-slate-700"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-slate-900">{pkg.package_code}</span>
-                    {pkg.synthetic ? (
-                      <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 font-medium text-violet-900">
-                        {COPY.sampleDesignData}
-                      </span>
-                    ) : null}
-                    <span className="rounded-full bg-white px-2 py-0.5">
-                      {labelImportStatus(pkg.import_status)}
-                    </span>
-                  </div>
-                  <p className="mt-1 truncate text-slate-500">{pkg.source_filename}</p>
-                  {pkg.import_status === "partial" ? (
-                    <div className="mt-2">
-                      <button
-                        type="button"
-                        className="text-sky-700 underline"
-                        onClick={() =>
-                          setImportNoteOpen((id) => (id === pkg.id ? null : pkg.id))
-                        }
-                      >
-                        {COPY.viewImportNotes}
-                      </button>
-                      {importNoteOpen === pkg.id ? (
-                        <div className="mt-1 rounded-xl bg-white p-2 text-[11px] text-slate-600">
-                          <p>{COPY.partialImportExplain}</p>
-                          <details className="mt-1">
-                            <summary className="cursor-pointer text-sky-800">{COPY.techDetails}</summary>
-                            <pre className="mt-1 max-h-24 overflow-auto text-[10px]">
-                              {JSON.stringify(pkg.import_warnings, null, 2)}
-                            </pre>
-                          </details>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <details className="mt-1">
-                    <summary className="cursor-pointer text-sky-800">{COPY.techDetails}</summary>
-                    <p className="mt-1 font-mono text-[10px] break-all">SHA-256 {pkg.source_sha256}</p>
-                    <p className="mt-0.5">
-                      CRS EPSG:{pkg.source_crs_epsg} · {pkg.source_type} · 对象 {pkg.object_count}
-                    </p>
-                  </details>
-                </div>
-              ))}
-              {!packages.length ? <p className="text-xs text-slate-500">{COPY.noPackages}</p> : null}
-            </div>
-            </section>
-          </div>
-
-          <section className="panel-card flex h-full min-h-[280px] flex-col overflow-hidden rounded-[24px] border border-sky-200 shadow-sm xl:col-start-3 xl:row-start-1 xl:row-span-2">
-            <div className="mb-3 flex items-center gap-3 border-b border-sky-100 bg-gradient-to-r from-sky-50 to-white px-4 py-3.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-600 text-white shadow-sm">
-                <MapIcon className="h-5 w-5" />
-              </span>
-              <h3 className="text-base font-bold tracking-wide text-slate-950">{COPY.statsObjects}</h3>
-            </div>
-            <div className="max-h-56 space-y-2 overflow-y-auto px-4 pb-3">
-              {(summary?.objects || []).map((obj) => (
-                <button
-                  key={obj.id}
-                  type="button"
-                  onClick={() => onSelectObject(obj.id)}
-                  className={cn(
-                    "w-full rounded-2xl border px-3 py-2.5 text-left text-sm transition-all",
-                    selectedObjectId === obj.id
-                      ? "border-orange-300 bg-orange-50"
-                      : "border-slate-200 hover:border-sky-200",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-slate-900">{obj.object_code}</span>
-                    <span className="text-[10px] text-slate-500">{labelObjectType(obj.object_type)}</span>
-                  </div>
-                  <p className="mt-0.5 truncate text-xs text-slate-500">{obj.name}</p>
-                </button>
-              ))}
-              {!summary?.objects.length ? (
-                <p className="text-xs text-slate-500">{COPY.noObjects}</p>
-              ) : null}
-            </div>
-
-            {selectedObject ? (
-              <div className="mx-4 mb-4 mt-2 flex flex-1 flex-col rounded-2xl border border-sky-200 bg-sky-50/60 p-4 text-xs shadow-sm">
-                <div className="mb-3 border-b border-sky-200 pb-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-700">已选工程对象</p>
-                  <p className="mt-1 text-base font-bold text-slate-950">{selectedObject.object_code}</p>
-                  <p className="mt-1 text-xs text-slate-500">{selectedObject.name}</p>
-                </div>
-                <div className="grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-2.5 leading-5">
-                  <span className="text-slate-500">{COPY.objectType}</span><strong>{labelObjectType(selectedObject.object_type)}</strong>
-                  <span className="text-slate-500">{COPY.designVersion}</span><strong>{selectedObject.design_version}</strong>
-                  <span className="text-slate-500">{COPY.sourceLayer}</span><strong>{selectedObject.source_layer}</strong>
-                  <span className="text-slate-500">来源要素</span><strong className="break-all">{selectedObject.source_feature_id}</strong>
-                  <span className="text-slate-500">几何类型</span><strong>{selectedObject.geometry_type}</strong>
-                  <span className="text-slate-500">坐标系</span><strong>EPSG:{selectedObject.geometry_source_crs_epsg}</strong>
-                  <span className="text-slate-500">关联状态</span><strong className="text-emerald-700">已关联设计对象</strong>
-                </div>
-                <button
-                  type="button"
-                  className="mt-auto pt-4 text-left font-medium text-sky-700 underline"
-                  onClick={() => setObjectTechOpen((v) => !v)}
-                >
-                  {objectTechOpen ? "收起" : COPY.techDetails}
-                </button>
-                {objectTechOpen ? (
-                  <>
-                    <p className="text-slate-500">{COPY.engineeringAttrs}</p>
-                    <pre className="max-h-24 overflow-auto rounded-xl bg-slate-50 p-2 text-[10px]">
-                      {JSON.stringify(selectedObject.attributes_snapshot, null, 2)}
-                    </pre>
-                    <p className="text-slate-500">{COPY.designRequirements}</p>
-                    <pre className="max-h-28 overflow-auto rounded-xl bg-slate-50 p-2 text-[10px]">
-                      {JSON.stringify(selectedObject.expected_rules, null, 2)}
-                    </pre>
-                  </>
-                ) : null}
-              </div>
-            ) : selectedQgisObject ? (
-              <div className="mx-4 mb-4 mt-2 flex flex-1 flex-col rounded-2xl border border-sky-200 bg-sky-50/60 p-4 text-xs shadow-sm">
-                <div className="mb-3 border-b border-sky-200 pb-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-700">已选工程对象</p>
-                  <p className="mt-1 text-base font-bold text-slate-950">{selectedQgisObject.objectCode}</p>
-                  <p className="mt-1 text-xs text-slate-500">来自网页化 QGIS 工程图层</p>
-                </div>
-                <div className="grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-2.5 leading-5">
-                  <span className="text-slate-500">对象标识</span><strong className="break-all">{selectedQgisObject.id}</strong>
-                  <span className="text-slate-500">{COPY.objectType}</span><strong>{selectedQgisObject.objectType}</strong>
-                  <span className="text-slate-500">{COPY.designVersion}</span><strong>{selectedQgisObject.designVersion}</strong>
-                  <span className="text-slate-500">{COPY.sourceLayer}</span><strong>{selectedQgisObject.sourceLayer}</strong>
-                  <span className="text-slate-500">图形序号</span><strong>第 {selectedQgisObject.featureIndex} 个要素</strong>
-                  <span className="text-slate-500">几何类型</span><strong>{selectedQgisObject.geometryType}</strong>
-                  <span className="text-slate-500">显示坐标系</span><strong>WGS 84 · EPSG:4326</strong>
-                  <span className="text-slate-500">数据来源</span><strong>Dreieich Mitte QGIS 工程</strong>
-                  <span className="text-slate-500">关联状态</span><strong className="text-emerald-700">已关联地图要素</strong>
-                </div>
-              </div>
-            ) : (
-              <div className="mx-4 mb-4 mt-2 flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
-                <MapIcon className="h-8 w-8 text-slate-300" />
-                <p className="mt-3 text-sm font-semibold text-slate-700">选择工程对象查看详情</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">将鼠标停留在地图要素上查看概览，点击后在这里显示完整信息。</p>
-              </div>
-            )}
-          </section>
         </aside>
 
-        <section
-          className={cn(
-            "panel-card overflow-hidden rounded-[24px] border border-slate-200 shadow-sm xl:col-start-2 xl:row-start-1 xl:row-span-2",
-            mobileTab !== "map" && "hidden lg:block",
-          )}
-        >
-          <div className="border-b border-slate-100 px-4 py-3">
-            <h3 className="text-sm font-semibold text-slate-900">{COPY.mapTitle}</h3>
+        <section className="gis-map-pane" aria-label="工程地图">
+          <div className="gis-section-head">
+            <h3><MapPin size={15} aria-hidden="true" /> 工程地图</h3>
+            <span>{selectedObject && !selectedReference ? selectedObject.object_code : "项目视图"}</span>
           </div>
-          <div className="h-[min(52vh,480px)] min-h-[280px] w-full lg:h-[min(62vh,560px)]">
-            {hasImportedMap ? (
-              <GeoMap
-                objects={summary?.objects ?? []}
-                selectedObjectId={selectedObjectId}
-                onSelectObject={onSelectObject}
-                onSelectQgisObject={(object) => {
-                  setSelectedObjectId(null);
-                  setSelectedQgisObject(object);
-                  setMobileTab("objects");
-                }}
-                captureMarker={captureMarker}
-                onlineStyleUrl={onlineStyleUrl}
-                showQgisProject
-                className="h-full w-full"
-              />
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center bg-slate-50 px-6 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-600">
-                  <MapIcon className="h-6 w-6" />
-                </div>
-                <p className="mt-4 text-sm font-semibold text-slate-800">尚未导入工程地图</p>
-                <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">
-                  请先在左侧选择并上传 GeoPackage 文件，随后将在这里显示空间分布。
-                </p>
-              </div>
-            )}
-          </div>
-          <p className="border-t border-slate-100 px-4 py-2 text-[11px] leading-4 text-slate-500">
-            {COPY.mapFooter}
-          </p>
+          <GeoMap
+            key={projectId}
+            className="gis-map"
+            objects={objects}
+            selectedObjectId={selectedReference ? null : selectedObject?.id ?? null}
+            onSelectObject={selectObject}
+            onSelectQgisObject={(object) => setReference(object ? { object, locationKey } : null)}
+            selectedQgisObjectId={selectedReference?.id ?? null}
+            captureMarker={marker && marker.orderId === orderId ? marker.position : null}
+            onlineStyleUrl={ONLINE_STYLE_URL}
+            emptyMessage={loading && !data && !projectsError ? "正在读取空间数据…" : "暂无工程图层"}
+          />
+
         </section>
 
-        <aside
-          className={cn(
-            "space-y-4 xl:col-span-3 xl:row-start-3 xl:grid xl:grid-cols-3 xl:items-start xl:gap-4 xl:space-y-0",
-            mobileTab !== "orders" && "hidden lg:block",
-          )}
-        >
-          <section className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <ShieldIcon className="h-4 w-4 text-sky-600" />
-                <h3 className="text-sm font-semibold text-slate-900">{COPY.workOrders}</h3>
-              </div>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="rounded-xl border border-slate-200 px-2 py-1 text-[11px]"
+        <aside className="gis-inspector" aria-label="对象详情">
+          <div className="gis-section-head">
+            <h3>{selectedReference ? "外部设计要素" : "对象详情"}</h3>
+            {(selectedReference || selectedObject) && (
+              <button
+                type="button"
+                className="gis-icon-button"
+                aria-label={selectedReference ? "清除外部设计要素" : "清除选中对象"}
+                onClick={() => selectedReference ? setReference(null) : changeSelection(null, null)}
               >
-                <option value="">{COPY.allStatuses}</option>
-                {Object.entries(WORK_ORDER_STATUS_LABEL).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="max-h-40 space-y-2 overflow-y-auto">
-              {filteredWorkOrders.map((wo) => {
-                const obj = summary?.objects.find((o) => o.id === wo.engineering_object_id);
-                return (
-                  <button
-                    key={wo.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedWorkOrderId(wo.id);
-                      setSelectedObjectId(wo.engineering_object_id);
-                    }}
-                    className={cn(
-                      "w-full rounded-2xl border px-3 py-2 text-left text-xs transition-all",
-                      selectedWorkOrderId === wo.id
-                        ? "border-sky-300 bg-sky-50"
-                        : "border-slate-200 hover:border-sky-200",
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-slate-900">{wo.work_order_code}</span>
-                      <span className="text-[10px] text-slate-500">
-                        {labelWorkOrderStatus(wo.status)}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-[10px] text-slate-500">
-                      {obj?.object_code ?? "—"} · {COPY.designVersion} {wo.design_version}
-                    </p>
-                    <p className="mt-0.5 text-[10px] text-slate-500">
-                      {COPY.fieldSpatialTolerance} {wo.spatial_tolerance_m}
-                      {COPY.unitMeters} · {COPY.fieldGpsAccuracy} {wo.gps_accuracy_threshold_m}
-                      {COPY.unitMeters}
-                      {wo.assigned_to ? ` · ${wo.assigned_to}` : ""}
-                    </p>
-                  </button>
-                );
-              })}
-              {!filteredWorkOrders.length ? (
-                <p className="text-xs text-slate-500">{COPY.noWorkOrders}</p>
-              ) : null}
-            </div>
-          </section>
-
-          <section className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm">
-            <h3 className="text-sm font-semibold text-slate-900">{COPY.createWorkOrder}</h3>
-            {!selectedObject ? (
-              <p className="mt-2 text-xs text-amber-700">{COPY.selectObjectFirst}</p>
-            ) : (
-              <div className="mt-3 space-y-2">
-                <label className="block text-[11px] text-slate-500">
-                  {COPY.fieldWorkOrderCode}
-                  <input
-                    value={woCode}
-                    onChange={(e) => setWoCode(e.target.value)}
-                    placeholder={`${selectedObject.object_code}-WO-1`}
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-2 py-1.5 text-xs text-slate-900"
-                  />
-                </label>
-                <label className="block text-[11px] text-slate-500">
-                  {COPY.fieldProcedure}
-                  <input
-                    value={procedureCode}
-                    onChange={(e) => setProcedureCode(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-2 py-1.5 text-xs text-slate-900"
-                  />
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="block text-[11px] text-slate-500">
-                    {COPY.fieldSpatialTolerance}（{COPY.unitMeters}）
-                    <input
-                      value={toleranceM}
-                      onChange={(e) => setToleranceM(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-2 py-1.5 text-xs text-slate-900"
-                    />
-                  </label>
-                  <label className="block text-[11px] text-slate-500">
-                    {COPY.fieldGpsAccuracy}（{COPY.unitMeters}）
-                    <input
-                      value={gpsThresholdM}
-                      onChange={(e) => setGpsThresholdM(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-2 py-1.5 text-xs text-slate-900"
-                    />
-                  </label>
-                </div>
-                <label className="block text-[11px] text-slate-500">
-                  {COPY.fieldAssignee}
-                  <input
-                    value={assignedTo}
-                    onChange={(e) => setAssignedTo(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-2 py-1.5 text-xs text-slate-900"
-                  />
-                </label>
-                <button
-                  type="button"
-                  disabled={creatingWo}
-                  onClick={() => void onCreateWorkOrder()}
-                  className="w-full rounded-2xl bg-sky-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                >
-                  {creatingWo ? "创建中…" : COPY.createWorkOrder}
-                </button>
-              </div>
+                <X size={14} />
+              </button>
             )}
-          </section>
+          </div>
+          <div className="gis-inspector-body">
+            {selectedReference ? (
+              <>
+                <span className="fm-label">外部设计图层</span>
+                <h4>{selectedReference.objectCode}</h4>
+                <dl className="gis-data">
+                  <div><dt>类型</dt><dd>{selectedReference.objectType}</dd></div>
+                  <div><dt>来源图层</dt><dd>{selectedReference.sourceLayer}</dd></div>
+                  <div><dt>来源工程</dt><dd>德赖艾希中心区</dd></div>
+                </dl>
+              </>
+            ) : selectedObject ? (
+              <>
+                <span className="fm-label">{labelObjectType(selectedObject.object_type)}</span>
+                <h4>{engineeringObjectDisplayName(selectedObject.name || selectedObject.object_code)}</h4>
+                <dl className="gis-data">
+                  <div><dt>对象编号</dt><dd>{selectedObject.object_code}</dd></div>
+                  <div><dt>设计版本</dt><dd>{selectedObject.design_version}</dd></div>
+                </dl>
+                <details className="gis-disclosure">
+                  <summary>对象属性与设计要求</summary>
+                  <dl className="gis-data">
+                    <div><dt>来源图层</dt><dd>{selectedObject.source_layer}</dd></div>
+                    <div><dt>来源要素</dt><dd>{selectedObject.source_feature_id}</dd></div>
+                    <div><dt>坐标系统</dt><dd>EPSG:{selectedObject.geometry_source_crs_epsg}</dd></div>
+                  </dl>
+                  <p>{COPY.engineeringAttrs}</p>
+                  <pre>{JSON.stringify(selectedObject.attributes_snapshot, null, 2)}</pre>
+                  <p>{COPY.designRequirements}</p>
+                  <pre>{JSON.stringify(selectedObject.expected_rules, null, 2)}</pre>
+                </details>
+                <button type="button" className="fm-button fm-button-primary gis-inspector-cta" onClick={() => openDialog("create")}>
+                  <Plus size={15} aria-hidden="true" /> 新建工单
+                </button>
+              </>
+            ) : (
+              <FieldScene scene="survey" guidance="在地图或左侧清单选中工程对象，查看工单和采集记录。" />
+            )}
 
-          {selectedWorkOrder ? (
-            <section className="rounded-[24px] border border-slate-200 panel-card p-4 shadow-sm">
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-900">{COPY.fieldCapture}</h3>
-                <Link
-                  to={`/work-orders/${selectedWorkOrder.id}`}
-                  className="inline-flex items-center gap-0.5 text-[11px] font-medium text-sky-700"
-                >
-                  {COPY.independentWorkOrderPage} <ChevronRightIcon className="h-3.5 w-3.5" />
-                </Link>
-              </div>
-              <details className="mb-3 rounded-xl border border-slate-100 bg-slate-50 p-2 text-[10px]">
-                <summary className="cursor-pointer font-semibold text-slate-600">
-                  {COPY.frozenSnapshots}
-                </summary>
-                <p className="mt-1">
-                  {COPY.designVersion} {selectedWorkOrder.design_version}
-                </p>
-                <pre className="mt-1 max-h-28 overflow-auto">
-                  {JSON.stringify(
-                    {
-                      design_snapshot: selectedWorkOrder.design_snapshot,
-                      geometry_snapshot: selectedWorkOrder.geometry_snapshot,
-                      rules_snapshot: selectedWorkOrder.rules_snapshot,
-                    },
-                    null,
-                    2,
-                  )}
-                </pre>
-              </details>
-              <WorkOrderCapturePanel
-                workOrder={selectedWorkOrder}
-                onWorkOrderUpdated={(wo) => {
-                  setSummary((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          work_orders: prev.work_orders.map((w) => (w.id === wo.id ? wo : w)),
-                        }
-                      : prev,
-                  );
-                }}
-                onCaptureMarkerChange={setCaptureMarker}
-              />
-            </section>
-          ) : (
-            <div className="rounded-[24px] border border-dashed border-slate-200 panel-card p-4 text-xs text-slate-500">
-              <InfoIcon className="mb-1 inline h-4 w-4 text-slate-400" />{" "}
-              选择或创建施工工单后，可提交现场资料并查看核验结果。
-            </div>
-          )}
+            {selectedWorkOrder && !selectedReference && (
+              <section className="gis-related-order">
+                <span className="fm-label">当前工单</span>
+                <h4>{selectedWorkOrder.work_order_code}</h4>
+                <span className="gis-status" data-status={selectedWorkOrder.status}>
+                  {labelWorkOrderStatus(selectedWorkOrder.status)}
+                </span>
+                <dl className="gis-data">
+                  <div><dt>执行人</dt><dd>{selectedWorkOrder.assigned_to || "待分派"}</dd></div>
+                </dl>
+                <div className="gis-inspector-links">
+                  <Link className="fm-button" to={`/work-orders/${encodeURIComponent(selectedWorkOrder.id)}`}>
+                    {selectedWorkOrder.status === "draft" ? "分派工单" : "工单详情"}
+                  </Link>
+                  <button type="button" className="fm-button" onClick={() => openDialog("capture")}>采集与核验</button>
+                </div>
+              </section>
+            )}
+          </div>
         </aside>
       </div>
+
+      <section className="fm-panel gis-orders">
+        <div className="gis-section-head">
+          <h3><ListChecks size={16} aria-hidden="true" /> 施工工单 <span className="gis-count">{data?.summary.work_order_count ?? "—"}</span></h3>
+          <div className="gis-actions">
+            {selectedObject && (
+              <label className="gis-inline-control">
+                <input type="checkbox" checked={allOrders} onChange={(event) => setAllOrders(event.target.checked)} />
+                全部对象
+              </label>
+            )}
+            <select className="fm-input" aria-label="工单状态筛选" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              <option value="">全部状态</option>
+              {Object.entries(WORK_ORDER_STATUS_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="gis-table-wrap">
+          <table className="gis-table">
+            <thead><tr><th>工单</th><th>工程对象</th><th>工单状态</th><th>执行人</th><th>定位阈值</th><th><span className="sr-only">操作</span></th></tr></thead>
+            <tbody>
+              {filteredOrders.map((order) => {
+                const object = objects.find((item) => item.id === order.engineering_object_id);
+                return (
+                  <tr key={order.id} data-selected={order.id === selectedWorkOrder?.id}>
+                    <td>
+                      <button type="button" className="gis-table-link" onClick={() => changeSelection(order.engineering_object_id, order.id)}>
+                        {order.work_order_code}
+                      </button>
+                    </td>
+                    <td>{engineeringObjectDisplayName(object?.name || object?.object_code || "—")}</td>
+                    <td><span className="gis-status" data-status={order.status}>{labelWorkOrderStatus(order.status)}</span></td>
+                    <td>{order.assigned_to || "待分派"}</td>
+                    <td>{order.spatial_tolerance_m} 米 / {order.gps_accuracy_threshold_m} 米</td>
+                    <td><Link className="gis-table-link" to={`/work-orders/${encodeURIComponent(order.id)}`}>打开</Link></td>
+                  </tr>
+                );
+              })}
+              {!filteredOrders.length && <tr><td colSpan={6} className="gis-empty">{loading && !data && !projectsError ? "正在读取工单…" : "暂无匹配工单"}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {activeDialog === "import" && selectedProject && (
+        <Modal open title="导入工程设计" description={projectDisplayName(selectedProject.name)} onClose={closeDialog} size="md" placement="right">
+          <GpkgImportPanel
+            key={projectId}
+            projectId={projectId}
+            onImported={onImported}
+            onSavingChange={(saving) => {
+              if (current.current.locationKey === locationKey) importSaving.current = saving ? locationKey : null;
+            }}
+          />
+          <ImportRecords packages={data?.packages ?? []} />
+        </Modal>
+      )}
+      {activeDialog === "create" && selectedObject && (
+        <CreateOrderDialog
+          key={selectedObject.id}
+          object={selectedObject}
+          workOrders={workOrders}
+          onClose={closeDialog}
+          onSaved={onOrderSaved}
+        />
+      )}
+      {activeDialog === "capture" && selectedWorkOrder && (
+        <Modal open title="采集与核验" description={selectedWorkOrder.work_order_code} onClose={closeDialog} size="xl" placement="right">
+          <WorkOrderCapturePanel
+            key={selectedWorkOrder.id}
+            workOrder={selectedWorkOrder}
+            onWorkOrderUpdated={updateOrder}
+            onCaptureMarkerChange={setCaptureMarker}
+          />
+        </Modal>
+      )}
     </div>
   );
-};
+}
+
+function ImportRecords({ packages }: { packages: DesignPackage[] }) {
+  return (
+    <section className="gis-import-history">
+      <h4>{COPY.gpkgImportRecords}</h4>
+      {!packages.length && <p className="gis-empty">{COPY.noPackages}</p>}
+      {packages.map((pkg) => (
+        <details key={pkg.id} className="gis-disclosure">
+          <summary>
+            <span>{pkg.package_code}</span>
+            <span className="gis-history-status">{labelImportStatus(pkg.import_status)} · {pkg.object_count} 个对象</span>
+          </summary>
+          <dl className="gis-data">
+            <div><dt>来源文件</dt><dd>{pkg.source_filename}</dd></div>
+            <div><dt>坐标系统</dt><dd>EPSG:{pkg.source_crs_epsg}</dd></div>
+            <div><dt>导入时间</dt><dd>{formatWorkbenchTime(pkg.imported_at)}</dd></div>
+          </dl>
+          {pkg.import_warnings?.length > 0 && (
+            <details className="gis-disclosure">
+              <summary>{COPY.viewImportNotes}</summary>
+              <pre>{JSON.stringify(pkg.import_warnings, null, 2)}</pre>
+            </details>
+          )}
+        </details>
+      ))}
+    </section>
+  );
+}
+
+function CreateOrderDialog({
+  object,
+  workOrders,
+  onClose,
+  onSaved,
+}: {
+  object: EngineeringObject;
+  workOrders: WorkOrder[];
+  onClose: () => void;
+  onSaved: (order: WorkOrder, warning?: string) => void;
+}) {
+  const codes = new Set(workOrders.map((order) => order.work_order_code));
+  let sequence = 1;
+  while (codes.has(`${object.object_code}-WO-${sequence}`)) sequence += 1;
+  const defaultCode = `${object.object_code}-WO-${sequence}`;
+  const [code, setCode] = useState("");
+  const [procedure, setProcedure] = useState("TRENCH-BEFORE-BACKFILL");
+  const [tolerance, setTolerance] = useState("50");
+  const [accuracy, setAccuracy] = useState("30");
+  const [assignee, setAssignee] = useState("现场采集");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const locked = useRef(false);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (locked.current) return;
+    if (!Number.isFinite(Number(tolerance)) || Number(tolerance) <= 0
+      || !Number.isFinite(Number(accuracy)) || Number(accuracy) <= 0) {
+      setError("距离与定位精度阈值须大于 0 米。");
+      return;
+    }
+    locked.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const draft = await api.createWorkOrder(object.project_id, {
+        engineering_object_id: object.id,
+        work_order_code: code.trim() || defaultCode,
+        procedure_code: procedure.trim() || undefined,
+        spatial_tolerance_m: Number(tolerance),
+        gps_accuracy_threshold_m: Number(accuracy),
+        notes: "工程作业台创建",
+      });
+      if (!assignee.trim()) {
+        onSaved(draft);
+        return;
+      }
+      let assigned: WorkOrder;
+      try {
+        assigned = await api.assignWorkOrder(draft.id, assignee.trim());
+      } catch {
+        onSaved(draft, `工单 ${draft.work_order_code} 已保存。分派未确认，可在工单详情查看状态并重试。`);
+        return;
+      }
+      onSaved(assigned);
+    } catch (reason) {
+      setError(reason instanceof ApiRequestError && reason.status === 409
+        ? "该工单编号已使用，请修改编号。"
+        : describeError(reason, "无法创建工单，请重试"));
+    } finally {
+      locked.current = false;
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal open title="新建施工工单" description={engineeringObjectDisplayName(object.name || object.object_code)} onClose={() => { if (!locked.current) onClose(); }} size="md" placement="right">
+      <form className="gis-form" onSubmit={(event) => void submit(event)}>
+        <label>工单编号<input className="fm-input" value={code} placeholder={defaultCode} onChange={(event) => setCode(event.target.value)} disabled={busy} /></label>
+        <label>执行人<input className="fm-input" value={assignee} placeholder="留空保存为待分派" onChange={(event) => setAssignee(event.target.value)} disabled={busy} /></label>
+        <div className="gis-form-pair">
+          <label>空间容差（米）<input className="fm-input" type="number" min="0.01" step="any" required value={tolerance} onChange={(event) => setTolerance(event.target.value)} disabled={busy} /></label>
+          <label>定位精度阈值（米）<input className="fm-input" type="number" min="0.01" step="any" required value={accuracy} onChange={(event) => setAccuracy(event.target.value)} disabled={busy} /></label>
+        </div>
+        <details className="gis-disclosure">
+          <summary>施工工序{procedure === "TRENCH-BEFORE-BACKFILL" ? " · 沟槽回填前" : ""}</summary>
+          <label>工序编号<input className="fm-input" value={procedure} onChange={(event) => setProcedure(event.target.value)} disabled={busy} /></label>
+        </details>
+        {error && <Notice type="warning" message={error} />}
+        <div className="gis-actions">
+          <button type="button" className="fm-button" onClick={onClose} disabled={busy}>取消</button>
+          <button type="submit" className="fm-button fm-button-primary" disabled={busy}>
+            {busy ? "正在保存…" : assignee.trim() ? "创建并分派" : "创建工单"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}

@@ -41,7 +41,7 @@ import {
   WorkerRemediationPage,
   WorkerProfilePage,
 } from "./pages";
-import { PAGE_META, PRIMARY_NAV } from "./lib/productCopy";
+import { PAGE_META, PRIMARY_NAV, PRODUCT } from "./lib/productCopy";
 
 const mobileIconByPath: Record<string, React.FC<{ className?: string }>> = {
   "/dashboard": DashboardIcon,
@@ -144,26 +144,30 @@ const AppShell: React.FC = () => {
     if (path.startsWith("/work-orders/")) {
       return { title: "施工工单", subtitle: "现场资料提交与核验" };
     }
-    return PAGE_META[path] || { title: "烽眸智鉴", subtitle: "通信工程施工合规管理平台" };
+    return PAGE_META[path] || { title: PRODUCT.name, subtitle: PRODUCT.subtitle };
   };
 
   const meta = getPageMeta();
+  useEffect(() => {
+    document.title = `${meta.title} · ${PRODUCT.name}`;
+  }, [meta.title]);
   const shellWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth;
 
   return (
     <div
-      className="app-shell-bg min-h-screen"
+      className="fm-shell min-h-screen"
       style={{ "--sidebar-w": `${shellWidth}px` } as React.CSSProperties}
     >
+      <a href="#fm-main" className="fm-skip">跳到工作区</a>
       <Sidebar
         collapsed={sidebarCollapsed}
         width={sidebarWidth}
         onToggle={() => setSidebarCollapsed((value) => !value)}
         onWidthChange={setSidebarWidth}
       />
-      <div className="min-h-screen transition-[padding-left] duration-200 ease-out lg:pl-[var(--sidebar-w)]">
+      <div className="fm-workspace min-h-screen">
         <Header title={meta.title} subtitle={meta.subtitle} />
-        <main className="px-4 pb-8 pt-4 md:px-6 lg:px-8">
+        <main id="fm-main" className="fm-main">
           <MobileQuickNav />
           <Routes>
             <Route path="/dashboard" element={<DashboardPage />} />
@@ -175,7 +179,17 @@ const AppShell: React.FC = () => {
             <Route path="/gis-map" element={<GISMapPage />} />
             <Route path="/work-orders/:id" element={<WorkOrderPage />} />
             <Route path="/traceability" element={<TraceabilityPage />} />
-            <Route path="/settings/account" element={<AccountSettingsPage />} />
+            <Route
+              path="/settings/account"
+              element={
+                <AccountSettingsPage
+                  sidebarCollapsed={sidebarCollapsed}
+                  sidebarWidth={sidebarWidth}
+                  onSidebarCollapsedChange={setSidebarCollapsed}
+                  onSidebarWidthChange={setSidebarWidth}
+                />
+              }
+            />
             {ENABLE_INTERNAL_ROUTES ? (
               <>
                 <Route path="/ai-verification" element={<HiddenAIPage />} />

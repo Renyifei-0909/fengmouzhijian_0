@@ -22,6 +22,7 @@ from ..models import (
 )
 from .proof import verify_proof_archive
 from .storage import FileStorage, canonical_json_bytes, sha256_bytes
+from .work_orders import sync_work_order_for_source
 
 
 SYSTEM_NOTICE_CODES = frozenset(
@@ -409,7 +410,7 @@ def triage_case(
         severity = confirmed_severity or case.proposed_severity
         if severity not in SEVERITIES:
             raise RemediationValidationError("Confirmed severity is invalid")
-        return _apply_case_command(
+        updated = _apply_case_command(
             db,
             case=case,
             request_id=request_id,
@@ -426,7 +427,10 @@ def triage_case(
                 "confirmed_at": now,
             },
         )
-    return _apply_case_command(
+        if source_job.status == "approved":
+            sync_work_order_for_source(db, source_job.id, actor=actor)
+        return updated
+    updated = _apply_case_command(
         db,
         case=case,
         request_id=request_id,
@@ -442,6 +446,9 @@ def triage_case(
             "confirmed_at": now,
         },
     )
+    if source_job.status == "approved":
+        sync_work_order_for_source(db, source_job.id, actor=actor)
+    return updated
 
 
 def start_remediation(
@@ -479,7 +486,7 @@ def start_remediation(
     if case.status != "open" or case.version != expected_version:
         raise RemediationConflictError("Only an open confirmed case can start remediation")
     now = utcnow()
-    return _apply_case_command(
+    updated = _apply_case_command(
         db,
         case=case,
         request_id=request_id,
@@ -496,6 +503,8 @@ def start_remediation(
             "due_at": due_at,
         },
     )
+    sync_work_order_for_source(db, source_job.id, actor=actor)
+    return updated
 
 
 def create_remediation_attempt(
@@ -820,10 +829,10 @@ def finalize_remediation_after_seal(
     job: VerificationJob,
     report: StructuredReport,
     proof: ProofRecord,
-) -> None:
+) -> str | None:
     attempt = db.scalar(select(RemediationAttempt).where(RemediationAttempt.verification_job_id == job.id))
     if attempt is None:
-        return
+        return None
     case = db.get(FindingCase, attempt.case_id)
     if case is None:
         raise RemediationIntegrityError("Remediation verification lost its finding case")
@@ -832,7 +841,7 @@ def finalize_remediation_after_seal(
     if attempt.report_id is not None or attempt.proof_id is not None:
         if attempt.report_id != report.id or attempt.proof_id != proof.id:
             raise RemediationIntegrityError("Remediation attempt conflicts with its sealed artifacts")
-        return
+        return case.source_job_id
     previous_version = case.version
     attempt.report_id = report.id
     attempt.proof_id = proof.id
@@ -865,6 +874,7 @@ def finalize_remediation_after_seal(
             "new_version": case.version,
         },
     )
+    return case.source_job_id
 
 
 def finding_case_summary(db: Session, project_id: str | None = None) -> dict[str, Any]:

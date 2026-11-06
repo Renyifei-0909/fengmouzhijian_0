@@ -190,11 +190,16 @@ def test_report_html_escapes_untrusted_project_and_review_text(
 
     for untrusted in (malicious_name, malicious_location, malicious_reviewer, malicious_note):
         assert untrusted not in html_document
+    for untrusted in (malicious_name, malicious_location, malicious_note):
         assert html.escape(untrusted) in html_document
+    # The reader view identifies the authenticated reviewer. The submitted
+    # label is retained only in the original structured review.
+    assert html.escape(malicious_reviewer) not in html_document
     assert "<script" not in html_document.casefold()
     assert "<img" not in html_document.casefold()
     assert "<svg" not in html_document.casefold()
-    assert html_document.count("</pre>") == 1
+    assert "<pre>" not in html_document
+    assert "工程与设计依据" in html_document
 
 
 def test_tampered_archive_fails_verification(client: TestClient, project_and_baseline: tuple[dict, dict], valid_mp4_bytes: bytes) -> None:

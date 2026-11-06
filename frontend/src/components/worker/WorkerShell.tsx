@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { ClipboardList, CloudOff, UserRound, Wifi, Wrench } from "lucide-react";
-import { NavLink, useLocation } from "react-router";
+import { ArrowLeft, ClipboardList, CloudOff, UserRound, Wifi, Wrench } from "lucide-react";
+import { Link, NavLink, useLocation } from "react-router";
 import { WorkerIdentityProvider, useWorkerIdentity } from "../../lib/workerIdentity";
 import { cn } from "../../utils/cn";
+import { PRODUCT } from "../../lib/productCopy";
 
 const NAV_ITEMS = [
   { path: "/worker/work-orders", label: "我的工单", icon: ClipboardList },
@@ -33,48 +34,45 @@ const WorkerShellInner: React.FC<React.PropsWithChildren> = ({ children }) => {
 
   const title = location.pathname.startsWith("/worker/work-orders/")
     ? "工单详情"
-    : PAGE_TITLES[location.pathname] || "工人端";
+    : PAGE_TITLES[location.pathname] || "现场作业端";
+
+  useEffect(() => {
+    document.title = `${title} · ${PRODUCT.name}`;
+  }, [title]);
 
   return (
-    <div className="min-h-screen bg-[#f3f5f7] text-slate-950">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-slate-800 brand-hero text-white lg:flex lg:flex-col">
-        <div className="border-b border-white/10 px-5 py-5">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl ring-1 ring-white/15">
-              <img src="/brand/app-logo-mark.png" alt="烽眸智鉴" className="h-full w-full object-cover" draggable={false} />
-            </div>
-            <div>
-              <p className="text-sm font-semibold">烽眸智鉴</p>
-              <p className="mt-1 text-xs text-slate-400">现场作业端</p>
-            </div>
-          </div>
+    <div className="fm-worker-shell min-h-screen bg-[#f3f5f7] text-slate-950">
+      <aside className="fm-sidebar">
+        <div className="fm-side-brand">
+          <Link to="/worker/work-orders" className="fm-brand-link">
+            <img src="/brand/app-logo-integrated.webp" alt="" width={44} height={44} draggable={false} />
+            <div><strong>{PRODUCT.name}</strong><small>现场作业端</small></div>
+          </Link>
         </div>
-        <nav className="flex-1 space-y-1 px-3 py-5" aria-label="工人端主导航">
+        <nav className="fm-side-nav" aria-label="现场作业端主导航">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
-              className={({ isActive }) => cn(
-                "flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium",
-                isActive ? "bg-white text-slate-950" : "text-slate-300 hover:bg-white/8 hover:text-white",
-              )}
+              className={({ isActive }) => cn("fm-side-link", isActive && "is-active")}
             >
-              <item.icon className="h-4.5 w-4.5" aria-hidden="true" />
+              <item.icon size={18} aria-hidden="true" />
               {item.label}
             </NavLink>
           ))}
         </nav>
-        <div className="border-t border-white/10 px-5 py-4">
-          <p className="truncate text-sm font-medium">{profile.name || "未设置账号"}</p>
-          <p className="mt-1 truncate text-xs text-slate-400">{profile.id || "请先完成身份设置"}</p>
+        <div className="fm-side-footer">
+          <Link to="/dashboard" className="fm-side-link"><ArrowLeft size={18} aria-hidden="true" /> 返回管理工作台</Link>
+          <p className="mt-2 truncate px-3 text-sm font-medium">{profile.name || "未设置账号"}</p>
+          <p className="mt-1 truncate px-3 text-xs text-slate-300">{profile.id || "请先完成身份设置"}</p>
         </div>
       </aside>
 
       <div className="min-h-screen lg:pl-60">
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-8">
+        <header className="fm-worker-header sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-8">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-slate-500 lg:hidden">烽眸智鉴 · 现场作业端</p>
+              <p className="text-xs font-medium text-slate-500 lg:hidden">{PRODUCT.name} · 现场作业端</p>
               <h1 className="truncate text-lg font-semibold text-slate-950">{title}</h1>
             </div>
             <div

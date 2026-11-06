@@ -44,6 +44,7 @@ from .storage import (
     sha256_bytes,
     sha256_file,
 )
+from .work_orders import sync_work_order_for_source
 
 
 class SealBusyError(RuntimeError):
@@ -888,7 +889,7 @@ def _complete_operation(db: Session, storage: FileStorage, operation: SealOperat
     }:
         raise SealIntegrityError("Existing approval audit conflicts with seal operation")
     try:
-        finalize_remediation_after_seal(db, job=job, report=report, proof=proof)
+        source_job_id = finalize_remediation_after_seal(db, job=job, report=report, proof=proof)
     except RemediationIntegrityError as exc:
         raise SealIntegrityError(str(exc)) from exc
     transition = db.execute(
@@ -900,6 +901,7 @@ def _complete_operation(db: Session, storage: FileStorage, operation: SealOperat
         raise SealIntegrityError("Verification job is no longer in the sealing state")
     operation.state = "completed"
     operation.last_error = None
+    sync_work_order_for_source(db, source_job_id or job.id, actor=actor)
     db.commit()
 
 

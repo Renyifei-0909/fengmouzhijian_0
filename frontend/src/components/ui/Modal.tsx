@@ -11,6 +11,7 @@ interface ModalProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   size?: "md" | "lg" | "xl";
+  placement?: "center" | "right";
 }
 
 const sizeClassMap = {
@@ -27,6 +28,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   footer,
   size = "lg",
+  placement = "center",
 }) => {
   const titleId = useId();
   const descriptionId = useId();
@@ -49,9 +51,14 @@ export const Modal: React.FC<ModalProps> = ({
       if (event.key !== "Tab" || !dialogRef.current) return;
       const focusable = Array.from(
         dialogRef.current.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]'
         )
-      ).filter((element) => !element.hidden && element.getAttribute("aria-hidden") !== "true");
+      ).filter((element) => {
+        const closedDetails = element.closest("details:not([open])");
+        return element.tabIndex >= 0
+          && !element.closest('[hidden], [inert], [aria-hidden="true"]')
+          && (!closedDetails || closedDetails.firstElementChild === element);
+      });
       if (!focusable.length) {
         event.preventDefault();
         dialogRef.current.focus();
@@ -78,7 +85,10 @@ export const Modal: React.FC<ModalProps> = ({
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm sm:items-center">
+    <div className={cn(
+      "fixed inset-0 z-[100] flex overflow-y-auto bg-slate-950/70",
+      placement === "right" ? "justify-end" : "items-start justify-center p-4 sm:items-center"
+    )}>
       <div
         ref={dialogRef}
         role="dialog"
@@ -87,12 +97,13 @@ export const Modal: React.FC<ModalProps> = ({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          "flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-3xl border border-sky-100 bg-white shadow-2xl shadow-sky-950/20 outline-none",
+          "flex w-full flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl outline-none",
+          placement === "right" ? "h-dvh border-y-0 border-r-0" : "max-h-[calc(100dvh-2rem)] rounded-lg",
           sizeClassMap[size]
         )}
       >
-        <div className="shrink-0 border-b border-slate-200 bg-gradient-to-r from-sky-50 via-white to-cyan-50 px-6 py-5">
-          <div className="flex items-start justify-between gap-4">
+        <div className="shrink-0 border-b border-slate-200 bg-slate-50 px-6 py-4">
+          <div className="flex items-center justify-between gap-4">
             <div>
               <h3 id={titleId} className="text-lg font-semibold text-slate-900">{title}</h3>
               {description ? <p id={descriptionId} className="mt-1 text-sm text-slate-500">{description}</p> : null}
@@ -101,7 +112,7 @@ export const Modal: React.FC<ModalProps> = ({
               type="button"
               aria-label="关闭弹窗"
               onClick={onClose}
-              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition-all hover:border-sky-200 hover:text-sky-600"
+              className="flex size-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:border-sky-200 hover:text-sky-600"
             >
               <CloseIcon className="h-4 w-4" />
             </button>
@@ -113,6 +124,6 @@ export const Modal: React.FC<ModalProps> = ({
         {footer ? <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-6 py-4">{footer}</div> : null}
       </div>
     </div>,
-    document.body
+    document.querySelector(".fm-shell") ?? document.body
   );
 };

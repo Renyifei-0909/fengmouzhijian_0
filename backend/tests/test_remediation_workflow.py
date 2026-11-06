@@ -95,6 +95,31 @@ def _create_demo_project(client: TestClient) -> tuple[dict, dict]:
     return project, baseline_response.json()
 
 
+def _submit_work_order_with_finding(client: TestClient, video: bytes) -> tuple[dict, dict, dict, dict]:
+    project, _ = _create_demo_project(client)
+    package = Path(__file__).resolve().parents[2] / "examples/design-package-demo/synthetic-pipe-route-package.json"
+    imported = client.post(
+        f"/api/v1/projects/{project['id']}/design-packages/import-json",
+        files={"file": (package.name, package.read_bytes(), "application/json")},
+    )
+    assert imported.status_code == 201, imported.text
+    created = client.post(f"/api/v1/projects/{project['id']}/work-orders", json={
+        "engineering_object_id": imported.json()["objects"][0]["id"], "work_order_code": "PIPE-RECHECK-01",
+    })
+    assert created.status_code == 201, created.text
+    order = created.json()
+    assert client.post(f"/api/v1/work-orders/{order['id']}/assign", json={"assigned_to": "field-operator"}).status_code == 200
+    submitted = client.post(
+        f"/api/v1/work-orders/{order['id']}/verifications",
+        data={"analyzer": "demo_fixture", "location_source": "unknown"},
+        files={"file": ("source.mp4", video, "video/mp4")},
+    )
+    assert submitted.status_code == 202, submitted.text
+    source = client.get(f"/api/v1/verifications/{submitted.json()['job']['id']}").json()["job"]
+    assert source["status"] == "needs_review"
+    return project, {"id": order["baseline_id"]}, order, source
+
+
 def _restart_settings(tmp_path: Path) -> Settings:
     return Settings(
         environment="test",
@@ -365,8 +390,8 @@ def test_demo_case_full_remediation_reverification_closes_with_new_proof(
     client: TestClient,
     valid_mp4_bytes: bytes,
 ) -> None:
-    project, baseline = _create_demo_project(client)
-    source_job = _submit(client, project, baseline, valid_mp4_bytes, analyzer="demo_fixture")
+    project, baseline, order, source_job = _submit_work_order_with_finding(client, valid_mp4_bytes)
+    order_path = f"/api/v1/work-orders/{order['id']}"
     source_review = client.post(
         f"/api/v1/verifications/{source_job['id']}/review",
         headers=REVIEWER,
@@ -377,6 +402,7 @@ def test_demo_case_full_remediation_reverification_closes_with_new_proof(
         },
     )
     assert source_review.status_code == 200, source_review.text
+    assert client.get(order_path).json()["status"] == "approved"
     source_outcome = source_review.json()
     original_report_id = source_outcome["report"]["id"]
     original_proof_id = source_outcome["proof"]["id"]
@@ -411,6 +437,7 @@ def test_demo_case_full_remediation_reverification_closes_with_new_proof(
     assert cases[0]["scope"] == "demo"
     assert cases[0]["status"] == "pending_triage"
     case = _triage(client, cases[0])
+    assert client.get(order_path).json()["status"] == "deviation"
 
     started = client.post(
         f"/api/v1/finding-cases/{case['id']}/start-remediation",
@@ -424,6 +451,7 @@ def test_demo_case_full_remediation_reverification_closes_with_new_proof(
     )
     assert started.status_code == 200, started.text
     assert started.json()["status"] == "remediation_in_progress"
+    assert client.get(order_path).json()["status"] == "remediating"
 
     attempt_response = client.post(
         f"/api/v1/finding-cases/{case['id']}/remediation-attempts",
@@ -482,6 +510,9 @@ def test_demo_case_full_remediation_reverification_closes_with_new_proof(
     archive = client.get(f"/api/v1/proofs/{proof['id']}/archive")
     assert sealed_report_json_response.status_code == 200
     assert sealed_report_html_response.status_code == 200
+    assert "施工整改复验报告" in sealed_report_html_response.text
+    assert "影像与附属资料" in sealed_report_html_response.text
+    assert "<pre>" not in sealed_report_html_response.text
     assert archive.status_code == 200
     assert hashlib.sha256(archive.content).hexdigest() == proof["archive_sha256"]
     with zipfile.ZipFile(BytesIO(archive.content)) as bundle:
@@ -545,6 +576,9 @@ def test_demo_case_full_remediation_reverification_closes_with_new_proof(
     assert closed.json()["case"]["status"] == "closed"
     assert closed.json()["case"]["closure_proof_id"] == proof["id"]
     assert closed.json()["closure_evidence_status"] == "sealed"
+    assert client.get(order_path).json()["status"] == "closed"
+    gis_orders = client.get(f"/api/v1/projects/{project['id']}/gis-summary").json()["work_orders"]
+    assert next(item for item in gis_orders if item["id"] == order["id"])["status"] == "closed"
 
     current_report_record = client.get(f"/api/v1/reports/{original_report_id}").json()
     current_proof_record = client.get(f"/api/v1/proofs/{original_proof_id}").json()
@@ -578,7 +612,7 @@ def test_demo_case_full_remediation_reverification_closes_with_new_proof(
     assert original_verification.json()["valid"] is True
     assert all(original_verification.json()["checks"].values())
     summary = client.get(f"/api/v1/finding-cases/summary?project_id={project['id']}").json()
-    assert summary["demo_cases"] >= 2
+    assert summary["demo_cases"] == 1
     assert summary["closed_operational"] == 0
 
 
@@ -1237,9 +1271,8 @@ def test_reverification_binding_rejects_cross_project_and_attempt_reuse(
     client: TestClient,
     valid_mp4_bytes: bytes,
 ) -> None:
-    project, baseline = _create_demo_project(client)
+    project, baseline, _order, source = _submit_work_order_with_finding(client, valid_mp4_bytes)
     other_project, other_baseline = _create_demo_project(client)
-    source = _submit(client, project, baseline, valid_mp4_bytes, analyzer="demo_fixture")
     approved = client.post(
         f"/api/v1/verifications/{source['id']}/review",
         headers=REVIEWER,

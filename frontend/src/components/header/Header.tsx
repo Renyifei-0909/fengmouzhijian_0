@@ -1,117 +1,91 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { cn } from "../../utils/cn";
-import { SearchIcon, BellIcon, CloseIcon } from "../Icons";
-import { PRODUCT } from "../../lib/productCopy";
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
+import { ChevronRightIcon, CloseIcon, ProjectIcon, SearchIcon } from "../Icons";
+import { api, type Project } from "../../lib/api";
+import { PRIMARY_NAV, PRODUCT, projectDisplayName } from "../../lib/productCopy";
 
-export const Header: React.FC<{ title?: string; subtitle?: string }> = ({ title, subtitle }) => {
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [noticeOpen, setNoticeOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+export function Header({ title = PRODUCT.name, subtitle }: { title?: string; subtitle?: string }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState("");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectState, setProjectState] = useState<"loading" | "ready" | "error">("loading");
+
+  function openSearch() {
+    if (!dialog.current || dialog.current.open) return;
+    setQuery("");
+    setProjects([]);
+    setProjectState("loading");
+    setSearching(true);
+    dialog.current.showModal();
+    input.current?.focus();
+  }
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 10);
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+    const shortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        openSearch();
+      }
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
   }, []);
 
-  const nowText = useMemo(
-    () =>
-      new Intl.DateTimeFormat("zh-CN", {
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(new Date()),
-    []
-  );
+  useEffect(() => {
+    if (!searching) return;
+    let active = true;
+    api.listProjects().then((items) => {
+      if (!active) return;
+      setProjects(items);
+      setProjectState("ready");
+    }).catch(() => {
+      if (active) setProjectState("error");
+    });
+    return () => { active = false; };
+  }, [searching]);
+
+  const search = query.trim().toLocaleLowerCase();
+  const routes = PRIMARY_NAV.filter((item) => item.label.includes(search));
+  const matches = projects.filter((item) => [item.name, projectDisplayName(item.name), item.code, item.location].some((value) => value.toLocaleLowerCase().includes(search))).slice(0, 6);
 
   return (
-    <header
-      className={cn(
-        "sticky top-0 z-30 border-b px-4 py-4 backdrop-blur-xl md:px-6 lg:px-8",
-        scrolled ? "border-sky-100 bg-white/82 shadow-[0_10px_40px_-24px_rgba(2,132,199,0.35)]" : "border-transparent bg-transparent"
-      )}
-    >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-3">
-            <div className="hidden h-10 w-10 items-center justify-center overflow-hidden rounded-2xl shadow-lg shadow-sky-100 ring-1 ring-sky-200/70 lg:flex">
-              <img src="/brand/app-logo-mark.png" alt="" className="h-full w-full object-cover" draggable={false} />
-            </div>
-            <div className="min-w-0">
-              <h1
-                className={cn(
-                  "truncate text-xl font-semibold tracking-tight",
-                  scrolled ? "text-slate-900" : "text-white [text-shadow:0_1px_14px_rgba(2,8,23,0.65)]",
-                )}
-              >
-                {title || PRODUCT.defaultPageTitle}
-              </h1>
-              <div
-                className={cn(
-                  "mt-1 flex flex-wrap items-center gap-2 text-sm",
-                  scrolled ? "text-slate-500" : "text-sky-100/90 [text-shadow:0_1px_10px_rgba(2,8,23,0.55)]",
-                )}
-              >
-                {subtitle ? <span>{subtitle}</span> : null}
-                <span className={cn("hidden h-1 w-1 rounded-full md:inline-flex", scrolled ? "bg-slate-300" : "bg-white/50")} />
-                <span>当前时间 {nowText}</span>
-              </div>
-            </div>
-          </div>
+    <>
+      <header className="fm-header">
+        <div className="fm-header-heading">
+          <img src="/brand/app-logo-integrated.webp" alt={PRODUCT.name} className="fm-mobile-brand" width={34} height={34} />
+          <div><h1>{title}</h1>{subtitle && <p>{subtitle}</p>}</div>
         </div>
-
-        <div className="flex items-center gap-3">
-          <div className={cn("transition-all duration-300", searchOpen ? "w-full md:w-80" : "w-11") }>
-            {searchOpen ? (
-              <div className="flex items-center gap-2 rounded-2xl border border-sky-200 bg-white px-3 py-2 shadow-sm shadow-sky-100">
-                <SearchIcon className="h-4 w-4 text-sky-500" />
-                <input
-                  autoFocus
-                  placeholder="搜索项目、设备、告警、档案编号..."
-                  className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
-                />
-                <button
-                  onClick={() => setSearchOpen(false)}
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition-all hover:bg-sky-50 hover:text-sky-700"
-                >
-                  <CloseIcon className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setSearchOpen(true)}
-                className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-sm transition-all hover:border-sky-200 hover:text-sky-700"
-              >
-                <SearchIcon className="h-4.5 w-4.5" />
-              </button>
-            )}
-          </div>
-
-          <div className="relative">
-            <button
-              onClick={() => setNoticeOpen((prev) => !prev)}
-              className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-sm transition-all hover:border-sky-200 hover:text-sky-700"
-            >
-              <BellIcon className="h-4.5 w-4.5" />
-              <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white" />
-            </button>
-            {noticeOpen ? (
-              <div className="absolute right-0 top-14 w-80 rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl shadow-sky-100">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-sm font-semibold text-slate-900">通知</p>
-                  <button onClick={() => setNoticeOpen(false)} className="text-xs text-sky-700 hover:text-sky-800">
-                    关闭
-                  </button>
-                </div>
-                <p className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 text-sm text-slate-600">
-                  暂无待处理通知。核验与整改请在对应业务模块查看。
-                </p>
-              </div>
-            ) : null}
-          </div>
+        <div className="fm-header-actions">
+          <button type="button" className="fm-header-search" onClick={openSearch} aria-label="查找项目或页面">
+            <SearchIcon className="size-4" /><span>查找项目或页面</span><kbd>Ctrl / ⌘ K</kbd>
+          </button>
+          <Link to="/worker" className="fm-button fm-field-link">现场作业端 <ChevronRightIcon className="size-4" /></Link>
         </div>
-      </div>
-    </header>
+      </header>
+      <dialog ref={dialog} className="fm-search-dialog" aria-label="查找项目或页面" onClose={() => setSearching(false)}>
+        <div className="fm-search-input">
+          <SearchIcon className="size-5 shrink-0" />
+          <input ref={input} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入项目名称、编号或页面名称" aria-label="搜索词" />
+          <button type="button" className="fm-button" aria-label="关闭搜索" onClick={() => dialog.current?.close()}><CloseIcon className="size-4" /></button>
+        </div>
+        <div className="fm-search-results">
+          {routes.length > 0 && <section aria-label="页面结果"><p className="fm-label">前往页面</p>
+            {routes.map((route) => <Link key={route.path} to={route.path} onClick={() => dialog.current?.close()}>
+              <span>{route.label}</span><ChevronRightIcon className="size-4" />
+            </Link>)}
+          </section>}
+          <section aria-label="项目结果"><p className="fm-label">项目</p>
+            {matches.map((project) => <Link key={project.id} to={`/projects/${project.id}`} onClick={() => dialog.current?.close()}>
+              <ProjectIcon className="size-4 shrink-0" /><span>{projectDisplayName(project.name)}</span><small>{project.location}</small>
+            </Link>)}
+            {projectState === "loading" && <p role="status">正在读取项目…</p>}
+            {projectState === "error" && <p role="status">项目暂时无法加载</p>}
+            {projectState === "ready" && matches.length === 0 && <p>暂无匹配项目</p>}
+          </section>
+        </div>
+      </dialog>
+    </>
   );
-};
+}

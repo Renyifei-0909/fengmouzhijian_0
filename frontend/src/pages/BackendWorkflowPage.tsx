@@ -1,1775 +1,880 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
-import { AnalyzerName, api, ApiRequestError, Baseline, CapabilityMeta, FindingCaseDetail, IntegrityCheck, Project, Proof, Report, VerificationDetail, VerificationOperationsSnapshot } from "../lib/api";
-import { AnalyticsIcon, BlockchainIcon, CameraIcon, CheckIcon, DatabaseIcon, DownloadIcon, InfoIcon, ShieldIcon, XIcon } from "../components/Icons";
-import { EvidencePreview } from "../components/ui/EvidencePreview";
-import { AnalysisTruthPanel, TruthBadge } from "../components/ui/TruthStatus";
-import { cn } from "../utils/cn";
-import { analysisTruthFromJob, reportTruthFromReport } from "../lib/truth";
+import { projectDisplayName } from "../lib/productCopy";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent } from "react";
+import { Link, useSearchParams } from "react-router";
+import { ArrowLeft, ArrowUpRight, ChevronRight, ClipboardList, Download, FileCheck2, FileUp, Plus, RefreshCw, Search, Settings2 } from "lucide-react";
+import { Modal } from "../components/ui/Modal";
+import { FieldScene } from "../components/ui/FieldScene";
+import { OperationStatus } from "../components/ui/OperationStatus";
+import { api, ApiRequestError } from "../lib/api";
+import type {
+  AnalyzerName, Baseline, CapabilityMeta, FindingCaseDetail, IntegrityCheck, Project, RemediationAttempt,
+  VerificationDetail, VerificationJob, VerificationOperationsSnapshot,
+} from "../lib/api";
+import { isTrialJob, isTrialProject } from "../lib/truth";
+import { groupDifferenceRows, labelHumanReviewStatus, labelRuleVerdict, structureObservations } from "../lib/verificationDisplay";
+import {
+  apiMessage, findingTitle, LinkedWorkOrder, localTime, objectValue, textValue, useRecordedEvidence, WorkbenchEmpty, WorkbenchEvidence, WorkbenchMeta, WorkbenchStatus,
+} from "./workbench-ui";
+import type { WorkbenchTone } from "./workbench-ui";
 
-const statusLabel: Record<string, string> = {
-  queued: "排队中",
-  running: "处理中",
-  needs_review: "待人工复核",
-  sealing: "报告与证据封存中",
-  approved: "已复核并封装",
-  rejected: "已驳回",
-  failed: "处理失败",
+const jobStatus: Record<VerificationJob["status"], { label: string; tone: WorkbenchTone }> = {
+  queued: { label: "排队中", tone: "neutral" },
+  running: { label: "处理中", tone: "cyan" },
+  needs_review: { label: "待复核", tone: "amber" },
+  sealing: { label: "封存中", tone: "cyan" },
+  approved: { label: "已封存", tone: "green" },
+  rejected: { label: "已驳回", tone: "red" },
+  failed: { label: "处理失败", tone: "red" },
 };
 
-const dispatchStateLabel: Record<VerificationDetail["dispatch"]["state"], string> = {
-  unclaimed: "等待领取",
-  leased: "租约有效",
-  released: "租约已释放",
-  dead_letter: "已进入死信",
+const queueFilters = {
+  all: { label: "全部", statuses: [] },
+  review: { label: "待复核", statuses: ["needs_review"] },
+  active: { label: "处理中", statuses: ["queued", "running", "sealing"] },
+  finished: { label: "已完成", statuses: ["approved", "rejected"] },
+  failed: { label: "处理失败", statuses: ["failed"] },
+} satisfies Record<string, { label: string; statuses: VerificationJob["status"][] }>;
+
+type QueueFilter = keyof typeof queueFilters;
+type RemediationResolution = "resolved" | "not_resolved";
+type RemediationContext = {
+  detail: FindingCaseDetail;
+  attempt: RemediationAttempt;
+  project: Project;
+  baseline: Baseline;
 };
 
-const attemptDispositionLabel = {
-  committed_success: "结果已提交",
-  committed_failure: "失败已提交",
-  lease_expired: "租约已过期",
-  lease_lost: "Worker 丢失租约",
-  write_fenced: "陈旧写入已拦截",
-} satisfies Record<
-  NonNullable<VerificationDetail["attempts"][number]["outcome"]>["disposition"],
-  string
->;
-
-const attemptDispositionTone = {
-  committed_success: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  committed_failure: "border-rose-200 bg-rose-50 text-rose-700",
-  lease_expired: "border-amber-200 bg-amber-50 text-amber-700",
-  lease_lost: "border-orange-200 bg-orange-50 text-orange-700",
-  write_fenced: "border-slate-300 bg-slate-100 text-slate-700",
-} satisfies Record<
-  NonNullable<VerificationDetail["attempts"][number]["outcome"]>["disposition"],
-  string
->;
-
-const shortWorkerRef = (value: string) => (
-  value.length > 40 ? `${value.slice(0, 24)}…${value.slice(-12)}` : value
-);
-
-const operationsStatusLabel = {
-  healthy: "运行平稳",
-  attention: "需要关注",
-  incident: "完整性事故",
-} satisfies Record<VerificationOperationsSnapshot["status"], string>;
-
-const operationsStatusTone = {
-  healthy: "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
-  attention: "border-amber-300/30 bg-amber-300/10 text-amber-100",
-  incident: "border-rose-300/30 bg-rose-400/10 text-rose-100",
-} satisfies Record<VerificationOperationsSnapshot["status"], string>;
-
-const operationsAlertCopy = {
-  INTEGRITY_INCIDENT: {
-    label: "完整性门禁已触发",
-    detail: "调度或 attempt 历史存在矛盾，readyz 会保持 fail closed。",
-  },
-  DEAD_LETTER_PRESENT: {
-    label: "存在死信任务",
-    detail: "重试预算已经耗尽，需要人工检查失败原因和处置路径。",
-  },
-  QUEUE_WAIT_EXCEEDED: {
-    label: "排队等待超阈值",
-    detail: "最早的排队任务已超过当前等待告警阈值。",
-  },
-  RECENT_LEASE_INSTABILITY: {
-    label: "近期租约不稳定",
-    detail: "观察窗口内出现过期、租约丢失或 fenced write。",
-  },
-} satisfies Record<
-  VerificationOperationsSnapshot["alerts"][number]["code"],
-  { label: string; detail: string }
->;
-
-const formatOperationalAge = (seconds: number | null) => {
-  if (seconds === null) return "—";
-  if (seconds < 60) return `${Math.round(seconds)} 秒`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分 ${Math.round(seconds % 60)} 秒`;
-  return `${Math.floor(seconds / 3600)} 小时 ${Math.floor((seconds % 3600) / 60)} 分`;
+const analyzerLabel: Record<string, string> = {
+  stub: "人工核验",
+  remote_http: "辅助识别",
+  demo_fixture: "规则辅助",
 };
 
-const workflowSteps = ["工程基线", "原始证据", "结构化处理", "人工复核", "报告生成", "哈希校验"];
+const alertLabels: Record<VerificationOperationsSnapshot["alerts"][number]["code"], string> = {
+  INTEGRITY_INCIDENT: "调度记录存在完整性异常",
+  DEAD_LETTER_PRESENT: "存在等待人工处理的失败任务",
+  QUEUE_WAIT_EXCEEDED: "排队时间超过设定阈值",
+  RECENT_LEASE_INSTABILITY: "近期执行节点连接不稳定",
+};
 
-export const BackendWorkflowPage: React.FC = () => {
-  const [searchParams] = useSearchParams();
-  const queryCaseId = searchParams.get("caseId")?.trim() || "";
-  const queryAttemptId = searchParams.get("attemptId")?.trim() || "";
-  const isRemediationMode = Boolean(queryCaseId || queryAttemptId);
-  const [health, setHealth] = useState<"checking" | "ready" | "offline">("checking");
-  // Session-only keys: never persist to localStorage so a wrong paste cannot
-  // permanently override the built-in key; a page reload always recovers.
-  const [operatorToken, setOperatorToken] = useState(() => import.meta.env.VITE_OPERATOR_API_KEY || "");
-  const [reviewerToken, setReviewerToken] = useState(() => import.meta.env.VITE_REVIEWER_API_KEY || "");
+const isAuthError = (reason: unknown) => reason instanceof ApiRequestError && [401, 403].includes(reason.status ?? 0);
+const matchesStatus = (job: VerificationJob, filter: QueueFilter) => filter === "all"
+  || (queueFilters[filter].statuses as VerificationJob["status"][]).includes(job.status);
+
+const loadFailure = "核验任务读取失败";
+
+export function BackendWorkflowPage() {
+  const [params, setParams] = useSearchParams();
+  const caseId = params.get("caseId")?.trim() || "";
+  const attemptId = params.get("attemptId")?.trim() || "";
+  const queryJob = params.get("job")?.trim() || "";
+  const remediation = Boolean(caseId || attemptId);
+  const caseReturnQuery = new URLSearchParams();
+  if (caseId) caseReturnQuery.set("caseId", caseId);
+  if (params.get("scope") === "trial") caseReturnQuery.set("scope", "trial");
+  const requestedStatus = params.get("status");
+  const filter: QueueFilter = requestedStatus === "needs_review" ? "review"
+    : requestedStatus === "failed" ? "failed"
+      : requestedStatus && ["queued", "running", "sealing"].includes(requestedStatus) ? "active"
+        : requestedStatus && ["approved", "rejected"].includes(requestedStatus) ? "finished" : "all";
+  const uploadOpen = params.get("action") === "upload";
+  const [jobs, setJobs] = useState<VerificationJob[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [meta, setMeta] = useState<CapabilityMeta | null>(null);
-  const [operations, setOperations] = useState<VerificationOperationsSnapshot | null>(null);
-  const [operationsLoading, setOperationsLoading] = useState(false);
-  const [operationsError, setOperationsError] = useState<string | null>(null);
-  const [project, setProject] = useState<Project | null>(null);
-  const [baseline, setBaseline] = useState<Baseline | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [analyzer, setAnalyzer] = useState<AnalyzerName>("stub");
-  const [remediationAttemptId, setRemediationAttemptId] = useState("");
-  const [remediationCaseDetail, setRemediationCaseDetail] = useState<FindingCaseDetail | null>(null);
-  const [remediationContextLoading, setRemediationContextLoading] = useState(false);
-  const [remediationContextError, setRemediationContextError] = useState<string | null>(null);
-  const [remediationResolution, setRemediationResolution] = useState<"" | "resolved" | "not_resolved">("");
-  const [detail, setDetail] = useState<VerificationDetail | null>(null);
-  const [report, setReport] = useState<Report | null>(null);
-  const [proof, setProof] = useState<Proof | null>(null);
-  const [integrity, setIntegrity] = useState<IntegrityCheck | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [pollError, setPollError] = useState<string | null>(null);
-  const [pollFailures, setPollFailures] = useState(0);
-  const [pollingPaused, setPollingPaused] = useState(false);
-  const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null);
-  const contextGenerationRef = useRef(0);
-  const activeJobIdRef = useRef<string | null>(null);
-  const actionSequenceRef = useRef(0);
-  const activeActionRef = useRef<number | null>(null);
-  const operationsRequestRef = useRef(0);
-
-  const refreshOperations = useCallback(async () => {
-    const requestId = operationsRequestRef.current + 1;
-    operationsRequestRef.current = requestId;
-    if (!operatorToken.trim()) {
-      setOperations(null);
-      setOperationsError(null);
-      setOperationsLoading(false);
-      return;
-    }
-    setOperationsLoading(true);
-    setOperationsError(null);
-    try {
-      const snapshot = await api.verificationDispatchOperations();
-      if (operationsRequestRef.current !== requestId) return;
-      setOperations(snapshot);
-    } catch (reason) {
-      if (operationsRequestRef.current !== requestId) return;
-      setOperations(null);
-      if (reason instanceof ApiRequestError && (reason.status === 401 || reason.status === 403)) {
-        setOperationsError("调度快照鉴权失败；已停止刷新，请检查操作员 Key。");
-      } else {
-        setOperationsError(reason instanceof Error ? reason.message : "调度快照读取失败");
-      }
-    } finally {
-      if (operationsRequestRef.current === requestId) setOperationsLoading(false);
-    }
-  }, [operatorToken]);
-
-  const beginAction = (name: string) => {
-    if (activeActionRef.current !== null) return null;
-    const token = {
-      id: actionSequenceRef.current + 1,
-      generation: contextGenerationRef.current,
-    };
-    actionSequenceRef.current = token.id;
-    activeActionRef.current = token.id;
-    setBusy(name);
-    return token;
-  };
-
-  const actionIsCurrent = (token: { id: number; generation: number }) => (
-    token.generation === contextGenerationRef.current
-    && activeActionRef.current === token.id
-  );
-
-  const finishAction = (token: { id: number; generation: number }) => {
-    if (!actionIsCurrent(token)) return;
-    activeActionRef.current = null;
-    setBusy(null);
-  };
+  const [keyword, setKeyword] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
+  const [includeTrial, setIncludeTrial] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [reload, setReload] = useState(0);
+  const [accessRevision, setAccessRevision] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [queueError, setQueueError] = useState("");
+  const queueRequest = useRef(0);
+  const queueJobUpdates = useRef(new Map<string, VerificationJob>());
 
   useEffect(() => {
-    Promise.all([api.health(), api.meta()])
-      .then(([, capability]) => {
-        setHealth("ready");
-        setMeta(capability);
-      })
-      .catch(() => setHealth("offline"));
+    let active = true;
+    void api.meta().then((next) => { if (active) setMeta(next); })
+      .catch(() => { if (active) setMeta(null); });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
-    api.configureTokens({ operator: operatorToken, reviewer: reviewerToken });
-  }, [operatorToken, reviewerToken]);
+    const generation = ++queueRequest.current;
+    const updates = new Map<string, VerificationJob>();
+    queueJobUpdates.current = updates;
+    setLoading(true);
+    setQueueError("");
+    void Promise.allSettled([api.listVerifications(), api.listProjects()]).then(([tasks, engineeringProjects]) => {
+      if (generation !== queueRequest.current) return;
+      if (tasks.status === "fulfilled") {
+        setJobs([...tasks.value.map((item) => updates.get(item.id) ?? item),
+          ...[...updates.values()].filter((item) => !tasks.value.some(({ id }) => id === item.id))]);
+      }
+      if (engineeringProjects.status === "fulfilled") setProjects(engineeringProjects.value);
+      const failure = tasks.status === "rejected" ? tasks.reason : engineeringProjects.status === "rejected" ? engineeringProjects.reason : null;
+      if (failure) setQueueError(apiMessage(failure, "任务列表读取失败"));
+      setLoading(false);
+    });
+    return () => { queueRequest.current += 1; };
+  }, [accessRevision, reload]);
+
+  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+  const scopedJobs = useMemo(() => {
+    const search = keyword.trim().toLocaleLowerCase();
+    return jobs.filter((job) => {
+      const project = projectById.get(job.project_id);
+      return (includeTrial || (!isTrialJob(job, meta) && !isTrialProject(project)))
+        && (!projectFilter || projectFilter === job.project_id)
+        && (!search || [job.id, project?.name, project && projectDisplayName(project.name), project?.code, project?.location, jobStatus[job.status].label]
+          .some((value) => value?.toLocaleLowerCase().includes(search)));
+    }).sort((left, right) => right.created_at.localeCompare(left.created_at));
+  }, [includeTrial, jobs, keyword, meta, projectById, projectFilter]);
+  const visibleJobs = scopedJobs.filter((job) => matchesStatus(job, filter));
+  const activeJob = queryJob;
+  const activeRow = jobs.find((job) => job.id === activeJob);
 
   useEffect(() => {
-    operationsRequestRef.current += 1;
-    setOperations(null);
-    setOperationsError(null);
-    setOperationsLoading(false);
-    if (!operatorToken.trim()) return;
-    const timer = window.setTimeout(() => {
-      void refreshOperations();
-    }, 500);
-    return () => window.clearTimeout(timer);
-  }, [operatorToken, refreshOperations]);
+    if (remediation || queryJob || !visibleJobs[0]) return;
+    const id = visibleJobs[0].id;
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("job", id);
+      return next;
+    }, { replace: true });
+  }, [queryJob, remediation, setParams, visibleJobs]);
+
+  const syncJob = useCallback((job: VerificationJob) => {
+    queueJobUpdates.current.set(job.id, job);
+    setJobs((current) => current.some((item) => item.id === job.id)
+      ? current.map((item) => item.id === job.id ? job : item)
+      : [job, ...current]);
+  }, []);
+
+  const setParam = (key: string, value: string, replace = false) => setParams((current) => {
+    const next = new URLSearchParams(current);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    return next;
+  }, { replace });
+  const afterUpload = (job: VerificationJob) => {
+    syncJob(job);
+    setKeyword("");
+    setProjectFilter("");
+    setParams({ job: job.id }, { replace: true });
+    setReload((value) => value + 1);
+  };
+  const activeProjects = includeTrial ? projects : projects.filter((project) => !isTrialProject(project));
+
+  return <div className="fm-wf page-enter">
+    <header className="fm-wf-heading">
+      <div>
+        {remediation ? <Link className="fm-wf-back" to={caseReturnQuery.size ? `/alarms?${caseReturnQuery}` : "/alarms"}><ArrowLeft size={14} /> 返回整改中心</Link> : null}
+        <h2>{remediation ? "整改复验" : "任务与复核"}</h2>
+        <p>{remediation ? "核对整改前后资料，记录本次现场复验结论。" : "按项目核对现场资料、复核工程偏差并封存证据。"}</p>
+      </div>
+      <div className="fm-wf-actions">
+        <button type="button" className="fm-button" onClick={() => setSettingsOpen(true)}><Settings2 size={16} />运行设置</button>
+        {!remediation ? <button type="button" className="fm-button fm-button-primary" onClick={() => setParam("action", "upload", true)}><Plus size={17} />提交核验资料</button> : null}
+      </div>
+    </header>
+
+    {remediation ? (
+      <RemediationWorkbench key={JSON.stringify([caseId, attemptId, accessRevision])}
+        caseId={caseId} attemptId={attemptId} meta={meta} onJob={syncJob} />
+    ) : (
+      <div className="fm-wf-layout">
+        <section className="fm-panel fm-wf-queue" aria-label="核验任务列表" aria-busy={loading}>
+          <div className="fm-wf-queue-head">
+            <div className="fm-wf-section-head"><h2><ClipboardList size={17} />核验任务</h2>
+              <button type="button" className="fm-wf-icon-button" title="刷新任务" aria-label="刷新任务" disabled={loading}
+                onClick={() => setReload((value) => value + 1)}><RefreshCw size={15} /></button>
+            </div>
+            <label className="fm-wf-search"><Search size={15} />
+              <input aria-label="搜索核验任务" placeholder="搜索项目、工点或任务" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
+            </label>
+            <select aria-label="按项目筛选核验任务" className="fm-input" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
+              <option value="">全部项目</option>
+              {activeProjects.map((project) => <option key={project.id} value={project.id}>{projectDisplayName(project.name)}</option>)}
+            </select>
+          </div>
+          <div className="fm-wf-tabs" aria-label="核验任务状态">
+            {(Object.keys(queueFilters) as QueueFilter[]).map((key) => <button key={key} type="button" aria-pressed={filter === key}
+              onClick={() => setParam("status", queueFilters[key].statuses[0] || "", true)}>{queueFilters[key].label}{key !== "all" ? <span>{scopedJobs.filter((job) => matchesStatus(job, key)).length}</span> : null}</button>)}
+          </div>
+          {queueError ? <p className="fm-wf-message" data-tone="red" role="alert">{queueError}</p> : null}
+          {visibleJobs.length ? <ol className="fm-wf-list">
+            {visibleJobs.map((job) => {
+              const project = projectById.get(job.project_id);
+              const status = jobStatus[job.status];
+              return <li key={job.id}>
+                <button type="button" aria-pressed={activeJob === job.id} onClick={() => setParam("job", job.id)}>
+                  <FileCheck2 size={17} aria-hidden="true" />
+                  <div className="fm-wf-row-text">
+                    <strong title={project ? projectDisplayName(project.name) : undefined}>{project ? projectDisplayName(project.name) : "工程核验"}</strong>
+                    <small>{localTime(job.created_at, true)}{project?.location ? ` · ${project.location}` : ""}</small>
+                  </div>
+                  <WorkbenchStatus tone={status.tone}>{status.label}</WorkbenchStatus>
+                </button>
+              </li>;
+            })}
+          </ol> : <WorkbenchEmpty title={loading ? "正在读取任务" : "暂无核验任务"}>
+            {loading || queueError ? null : keyword || filter !== "all" || projectFilter ? "可调整搜索条件或状态筛选。" : "从工单采集或提交现场资料开始。"}
+          </WorkbenchEmpty>}
+          <div className="fm-wf-queue-foot"><span>{visibleJobs.length} 项</span>{includeTrial ? <span>含扩展记录</span> : null}</div>
+        </section>
+        {activeJob ? <JobWorkbench key={JSON.stringify([activeJob, accessRevision])}
+          jobId={activeJob} project={activeRow ? projectById.get(activeRow.project_id) : undefined} meta={meta} onJob={syncJob} />
+          : <section className="fm-panel fm-wf-unselected"><WorkbenchEmpty title="核验工作区" media>
+            选择一项任务查看现场原件与复核记录。
+          </WorkbenchEmpty></section>}
+      </div>
+    )}
+
+    {uploadOpen && !remediation ? <VerificationUpload
+      projects={activeProjects} initialProjectId={activeRow?.project_id || projectFilter}
+      meta={meta} allowTrial={includeTrial} onClose={() => setParam("action", "", true)} onUploaded={afterUpload}
+    /> : null}
+    {settingsOpen ? <VerificationSettings meta={meta} includeTrial={includeTrial}
+      onTrialChange={(value) => {
+        setIncludeTrial(value);
+        if (!value && isTrialProject(projectById.get(projectFilter))) setProjectFilter("");
+      }}
+      onAccessChange={() => {
+        setJobs([]);
+        setProjects([]);
+        setAccessRevision((value) => value + 1);
+      }} onClose={() => setSettingsOpen(false)} /> : null}
+  </div>;
+}
+
+function RemediationWorkbench({ caseId, attemptId, meta, onJob }: {
+  caseId: string; attemptId: string; meta: CapabilityMeta | null; onJob: (job: VerificationJob) => void;
+}) {
+  const [context, setContext] = useState<RemediationContext | null>(null);
+  const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const source = useRecordedEvidence(context?.detail.case.source_job_id, context?.detail.case.source_evidence_id);
 
   useEffect(() => {
-    setPollingPaused(false);
-    setPollFailures(0);
-    setPollError(null);
-  }, [operatorToken]);
-
-  useLayoutEffect(() => {
-    contextGenerationRef.current += 1;
-    activeJobIdRef.current = null;
-    activeActionRef.current = null;
-    setRemediationAttemptId(queryAttemptId);
-    setRemediationResolution("");
-    setRemediationCaseDetail(null);
-    setRemediationContextError(null);
-    setRemediationContextLoading(false);
-    setProject(null);
-    setBaseline(null);
-    setDetail(null);
-    setReport(null);
-    setProof(null);
-    setIntegrity(null);
-    setFile(null);
-    setBusy(null);
-    setLastRefreshAt(null);
-    setPollError(null);
-    setPollFailures(0);
-    setPollingPaused(false);
-    setError(null);
-  }, [isRemediationMode, queryAttemptId, queryCaseId]);
-
-  useEffect(() => {
-    if (!isRemediationMode) return;
-    if (!queryCaseId || !queryAttemptId) {
-      setRemediationContextError("整改复验链接不完整，必须同时包含 caseId 与 attemptId");
+    if (!caseId || !attemptId) {
+      setError("整改复验链接不完整，请从整改记录重新进入。");
       return;
     }
-    if (!operatorToken.trim()) return;
-
     let active = true;
-    const generation = contextGenerationRef.current;
-    setRemediationContextLoading(true);
-    setRemediationContextError(null);
-    const loadRemediationContext = async () => {
-      try {
-        const caseDetail = await api.findingCase(queryCaseId);
-        const attempt = caseDetail.attempts.find((item) => item.id === queryAttemptId);
-        if (!attempt) throw new Error("Attempt 不属于当前案件，已阻止复验证据绑定");
-        const [originalProject, baselines] = await Promise.all([
-          api.getProject(caseDetail.case.project_id),
-          api.listBaselines(caseDetail.case.project_id),
-        ]);
-        const originalBaseline = baselines.find((item) => item.id === caseDetail.case.baseline_id);
-        if (!originalBaseline) throw new Error("原案件设计基线不存在，已阻止复验证据上传");
-        let existingDetail: VerificationDetail | null = null;
-        if (attempt.verification_job_id) {
-          existingDetail = await api.verification(attempt.verification_job_id);
-        }
-        if (!active || generation !== contextGenerationRef.current) return;
-        activeJobIdRef.current = existingDetail?.job.id || null;
-        setProject(originalProject);
-        setBaseline(originalBaseline);
-        setRemediationCaseDetail(caseDetail);
-        setDetail(existingDetail);
-        setReport(existingDetail?.report || null);
-        setProof(existingDetail?.proof || null);
-        setIntegrity(null);
-      } catch (reason) {
-        if (!active || generation !== contextGenerationRef.current) return;
-        activeJobIdRef.current = null;
-        setProject(null);
-        setBaseline(null);
-        setRemediationCaseDetail(null);
-        setDetail(null);
-        setReport(null);
-        setProof(null);
-        setIntegrity(null);
-        setRemediationContextError(reason instanceof Error ? reason.message : "原案件与 Attempt 加载失败");
-      } finally {
-        if (active) setRemediationContextLoading(false);
-      }
-    };
-    void loadRemediationContext();
-    return () => {
-      active = false;
-    };
-  }, [isRemediationMode, operatorToken, queryAttemptId, queryCaseId]);
+    setError("");
+    void api.findingCase(caseId).then(async (detail) => {
+      const attempt = detail.attempts.find((item) => item.id === attemptId);
+      if (!attempt) throw new Error("当前整改记录不存在，请返回整改中心。");
+      const [project, baselines] = await Promise.all([api.getProject(detail.case.project_id), api.listBaselines(detail.case.project_id)]);
+      const baseline = baselines.find((item) => item.id === detail.case.baseline_id);
+      if (!baseline) throw new Error("当前案件的设计基线无法读取。");
+      if (active) setContext({ detail, attempt, project, baseline });
+    }).catch((reason: unknown) => { if (active) setError(apiMessage(reason, "整改复验记录读取失败")); });
+    return () => { active = false; };
+  }, [attemptId, caseId, revision]);
 
-  const remediationAttempt = useMemo(
-    () => remediationCaseDetail?.attempts.find((item) => item.id === queryAttemptId) || null,
-    [queryAttemptId, remediationCaseDetail],
-  );
+  if (error || !context) return <section className="fm-panel fm-wf-unselected">
+    <WorkbenchEmpty title={error || "正在读取整改记录"}>
+      {error ? <button type="button" className="fm-button" onClick={() => setRevision((value) => value + 1)}>重新读取</button> : null}
+    </WorkbenchEmpty>
+  </section>;
 
-  const currentContextOwnsJob = useCallback((jobId: string) => {
-    if (activeJobIdRef.current !== jobId) return false;
-    if (!isRemediationMode) return true;
-    return (
-      remediationCaseDetail?.case.id === queryCaseId
-      && remediationAttempt?.id === queryAttemptId
-      && remediationAttempt.verification_job_id === jobId
-    );
-  }, [isRemediationMode, queryAttemptId, queryCaseId, remediationAttempt, remediationCaseDetail]);
+  const { detail, attempt, project, baseline } = context;
+  const canUpload = detail.case.status === "remediation_in_progress" && attempt.resolution_decision === "pending" && !attempt.verification_job_id;
+  return <>
+    <section className="fm-panel fm-wf-remediation-context">
+      <div><span className="fm-wf-label">第 {attempt.attempt_no} 次整改</span><h2>{findingTitle(detail.case.finding_code, detail.case.finding_message)}</h2>
+        <p>{projectDisplayName(project.name)} · {baseline.site_id} · {baseline.version}</p></div>
+      <div className="fm-wf-actions">
+        <Link className="fm-button" to={`/backend-workflow?job=${encodeURIComponent(detail.case.source_job_id)}`}>原核验任务 <ArrowUpRight size={14} /></Link>
+        {canUpload ? <button type="button" className="fm-button fm-button-primary" onClick={() => setUploadOpen(true)}><FileUp size={16} />提交复验资料</button> : null}
+      </div>
+    </section>
+    {attempt.verification_job_id ? <JobWorkbench key={attempt.verification_job_id} jobId={attempt.verification_job_id}
+      project={project} meta={meta} remediation={context} original={source} onJob={onJob} /> : <section className="fm-panel fm-wf-unselected">
+      <div className="fm-wf-unbound-compare">
+        {source.evidence ? <WorkbenchEvidence evidence={source.evidence} title="整改前" />
+          : <WorkbenchEmpty title={source.loading ? "正在读取整改前资料" : "整改前资料暂不可用"} media />}
+        {canUpload ? <FieldScene scene="recheck" guidance="提交时拍清整改部位、周边范围和工点标记。" />
+          : <WorkbenchEmpty title="暂无整改后资料" media />}
+      </div>
+    </section>}
+    {uploadOpen && canUpload ? <VerificationUpload projects={[project]} meta={meta} locked={context} allowTrial={detail.case.scope === "demo"}
+      onClose={() => setUploadOpen(false)} onUploaded={(job) => {
+        onJob(job);
+        setUploadOpen(false);
+        setContext({ ...context, detail: { ...detail, case: { ...detail.case, status: "verification_pending" } },
+          attempt: { ...attempt, verification_job_id: job.id } });
+      }} /> : null}
+  </>;
+}
 
-  const refreshJob = useCallback(async (jobId: string) => {
-    const generation = contextGenerationRef.current;
-    if (activeJobIdRef.current !== jobId) return false;
+function JobWorkbench({ jobId, project, meta, remediation, original, onJob }: {
+  jobId: string;
+  project?: Project;
+  meta: CapabilityMeta | null;
+  remediation?: RemediationContext;
+  original?: ReturnType<typeof useRecordedEvidence>;
+  onJob: (job: VerificationJob) => void;
+}) {
+  const [detail, setDetail] = useState<VerificationDetail | null>(null);
+  const [baseline, setBaseline] = useState<Baseline | null>(remediation?.baseline ?? null);
+  const [loading, setLoading] = useState(true);
+  const [refreshError, setRefreshError] = useState("");
+  const [pollFailures, setPollFailures] = useState(0);
+  const [pollPaused, setPollPaused] = useState(false);
+  const [pendingCases, setPendingCases] = useState<number | null>(null);
+  const [revision, setRevision] = useState(0);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [reviewNote, setReviewNote] = useState("");
+  const [resolution, setResolution] = useState<RemediationResolution | "">("");
+  const [integrity, setIntegrity] = useState<{ proofId: string; result: IntegrityCheck } | null>(null);
+  const requestVersion = useRef(0);
+  const operation = useRef<string | null>(null);
+  const mounted = useRef(false);
+  const lockedAttemptId = remediation?.attempt.id;
+  const lockedProjectId = remediation?.project.id;
+  const lockedBaselineId = remediation?.baseline.id;
+  const originalJobId = remediation?.detail.case.source_job_id;
+  const readJob = useCallback(async () => {
+    const request = ++requestVersion.current;
     try {
       const next = await api.verification(jobId);
-      if (generation !== contextGenerationRef.current || activeJobIdRef.current !== jobId) return false;
+      if (request !== requestVersion.current || !mounted.current) return;
+      if (lockedAttemptId && (next.remediation_attempt?.id !== lockedAttemptId
+        || next.job.project_id !== lockedProjectId || next.job.baseline_id !== lockedBaselineId)) {
+        setDetail(null);
+        setPollPaused(true);
+        setRefreshError("当前任务与整改记录不匹配。");
+        return;
+      }
       setDetail(next);
-      setReport(next.report);
-      setProof(next.proof);
+      onJob(next.job);
       setPollFailures(0);
-      setPollingPaused(false);
-      setLastRefreshAt(new Date());
-      setPollError(null);
-      return true;
+      setPollPaused(false);
+      setRefreshError("");
     } catch (reason) {
-      if (generation !== contextGenerationRef.current || activeJobIdRef.current !== jobId) return false;
-      const authFailure = reason instanceof ApiRequestError && [401, 403].includes(reason.status || 0);
-      setPollFailures((count) => count + 1);
-      if (authFailure) setPollingPaused(true);
-      const message = reason instanceof Error ? reason.message : "任务状态查询失败";
-      setPollError(authFailure ? `任务轮询已暂停：API Key 无效或权限不足。${message}` : message);
-      return false;
+      if (request !== requestVersion.current || !mounted.current) return;
+      setPollFailures((value) => value + 1);
+      setPollPaused(isAuthError(reason));
+      setRefreshError(apiMessage(reason, loadFailure));
+    } finally {
+      if (request === requestVersion.current && mounted.current) setLoading(false);
     }
+  }, [jobId, lockedAttemptId, lockedBaselineId, lockedProjectId, onJob]);
+
+  useEffect(() => {
+    mounted.current = true;
+    void readJob();
+    return () => { mounted.current = false; requestVersion.current += 1; };
+  }, [readJob]);
+
+  const job = detail?.job;
+  const polling = job?.status === "queued" || job?.status === "running"
+    || (job?.status === "sealing" && !detail?.recovery.last_error);
+  useEffect(() => {
+    if (!polling || pollPaused || busy) return;
+    const timer = window.setTimeout(() => void readJob(), Math.min(1200 * 2 ** pollFailures, 15_000));
+    return () => window.clearTimeout(timer);
+  }, [busy, detail, pollFailures, pollPaused, polling, readJob]);
+
+  const projectId = job?.project_id;
+  const baselineId = job?.baseline_id;
+  useEffect(() => {
+    if (!projectId || !baselineId || lockedBaselineId) return;
+    let active = true;
+    void api.listBaselines(projectId).then((rows) => {
+      if (active) setBaseline(rows.find((row) => row.id === baselineId) ?? null);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [baselineId, lockedBaselineId, projectId]);
+
+  const needsReview = job?.status === "needs_review";
+  const trial = Boolean(job && (isTrialJob(job, meta) || isTrialProject(project)));
+  useEffect(() => {
+    if (!needsReview || !projectId || trial) return;
+    let active = true;
+    void api.listFindingCases({ projectId, status: "pending_triage", scope: "operational" }).then((items) => {
+      if (active) setPendingCases(items.filter((item) => item.source_job_id === jobId).length);
+    }).catch(() => { if (active) setPendingCases(null); });
+    return () => { active = false; };
+  }, [jobId, needsReview, projectId, revision, trial]);
+
+  const run = async (name: string, action: () => Promise<void>, refreshOnError = false) => {
+    if (operation.current) return;
+    operation.current = name;
+    setBusy(name);
+    setError("");
+    try {
+      await action();
+    } catch (reason) {
+      if (!mounted.current) return;
+      const message = apiMessage(reason, "操作未能完成");
+      setError(message.includes("candidate findings") ? "请先在整改中心处理待确认事项。" : message);
+      if (refreshOnError) {
+        await readJob();
+        if (mounted.current) setRevision((value) => value + 1);
+      }
+    } finally {
+      if (mounted.current) setBusy("");
+      operation.current = null;
+    }
+  };
+
+  const review = (decision: "approve" | "reject", resume = false) => {
+    if (!detail || (decision === "approve" && pendingCases && !resume)) return;
+    const attempt = detail.remediation_attempt;
+    const result = resume ? attempt?.resolution_decision : resolution;
+    if (decision === "approve" && attempt && result !== "resolved" && result !== "not_resolved") return;
+    const note = resume ? attempt?.resolution_note || "继续封存已复核记录。"
+      : reviewNote.trim() || (decision === "approve" ? "已完成现场资料复核。" : "本次复核未通过。");
+    void run(resume ? "seal" : decision, async () => {
+      requestVersion.current += 1;
+      const outcome = await api.review(jobId, {
+        decision, reviewer: "网页复核员", note,
+        remediation_resolution: decision === "approve" && attempt && (result === "resolved" || result === "not_resolved") ? result : undefined,
+      });
+      if (!mounted.current) return;
+      setDetail({ ...detail, job: outcome.job, report: outcome.report, proof: outcome.proof });
+      onJob(outcome.job);
+      await readJob();
+    }, true);
+  };
+
+  const retry = () => {
+    if (!detail || detail.job.status !== "failed" || !detail.recovery.retryable) return;
+    void run("retry", async () => {
+      requestVersion.current += 1;
+      const next = await api.retryVerification(jobId);
+      if (!mounted.current) return;
+      setDetail({ ...detail, job: next });
+      onJob(next);
+      await readJob();
+    }, true);
+  };
+
+  if (!detail || !job) return <section className="fm-panel fm-wf-unselected" aria-busy={loading}>
+    <WorkbenchEmpty title={loading ? "正在读取核验记录" : "核验记录暂不可用"} media>
+      {refreshError ? <p role="alert">{refreshError}</p> : null}
+      {!loading ? <button type="button" className="fm-button" onClick={() => { setLoading(true); void readJob(); }}>重新读取</button> : null}
+    </WorkbenchEmpty>
+  </section>;
+
+  const analysis = objectValue(job.result);
+  const compliance = objectValue(analysis.compliance_evaluation);
+  const ruleVerdict = textValue(compliance.verdict);
+  const differences = groupDifferenceRows(ruleVerdict ? objectValue(analysis.alignment).differences : null);
+  const observations = structureObservations(objectValue(objectValue(analysis.observations).measurements)).known;
+  const orderMetadata = remediation ? original?.evidence?.metadata : detail.evidence.metadata;
+  const reportOrder = objectValue(detail.report?.content.work_order);
+  const workOrderId = textValue(reportOrder.id) || textValue(orderMetadata?.work_order_id);
+  const workOrderCode = textValue(reportOrder.code) || textValue(orderMetadata?.work_order_code);
+  const provenance = trial ? "规则辅助" : analyzerLabel[textValue(analysis.analysis_mode) || job.analyzer_name] || "其他来源";
+  const analysisStatus = jobStatus[job.status];
+  const { report, proof, recovery, remediation_attempt: attempt } = detail;
+  const packageCheck = integrity?.proofId === proof?.id ? integrity?.result : null;
+  const currentStep = job.status === "needs_review" || job.status === "rejected" ? 2
+    : job.status === "sealing" || job.status === "approved" ? 3 : 1;
+  const canResume = recovery.action === "resume_sealing" && recovery.retryable
+    && (!attempt || attempt.resolution_decision === "resolved" || attempt.resolution_decision === "not_resolved");
+  const finished = job.status === "approved" && Boolean(proof);
+
+  return <article className="fm-panel fm-wf-detail">
+    <header className="fm-wf-detail-head">
+      <div className="fm-wf-detail-title">
+        <span className="fm-wf-label">{remediation ? "复验记录" : "任务详情"}</span>
+        <h2>{project ? projectDisplayName(project.name) : "工程核验记录"}</h2>
+        <p>{[baseline?.site_id || project?.location, baseline?.version && `基线 ${baseline.version}`, localTime(job.created_at)].filter(Boolean).join(" · ")}</p>
+      </div>
+      <div className="fm-wf-actions">
+        <WorkbenchStatus tone={analysisStatus.tone}>{analysisStatus.label}</WorkbenchStatus>
+        <button type="button" className="fm-wf-icon-button" title="刷新当前任务" aria-label="刷新当前任务" disabled={Boolean(busy)}
+          onClick={() => { setRevision((value) => value + 1); void readJob(); }}><RefreshCw size={15} /></button>
+      </div>
+    </header>
+    <ol className="fm-wf-steps" aria-label="核验进度">
+      {["资料登记", "工程核验", "人工复核", "证据封存"].map((step, index) => <li key={step}
+        data-state={index < currentStep || (index === currentStep && finished) ? "done" : index === currentStep ? "current" : "pending"}
+        aria-current={index === currentStep && !finished ? "step" : undefined}>
+        <span>{index + 1}</span>{step}{index < 3 ? <ChevronRight size={13} aria-hidden="true" /> : null}
+      </li>)}
+    </ol>
+    {(busy === "approve" || busy === "seal" || (job.status === "sealing" && !canResume)) &&
+      <OperationStatus detail="正在生成报告、校验文件并写入交付档案。">正在封存复核记录</OperationStatus>}
+    {refreshError ? <p className="fm-wf-message" data-tone="amber" role="status">{refreshError}</p> : null}
+    {error ? <p className="fm-wf-message" data-tone="red" role="alert">{error}</p> : null}
+    <div className="fm-wf-inspection" data-remediation={Boolean(remediation)}>
+      <div className="fm-wf-media-stack" data-compare={Boolean(remediation)}>
+        {remediation ? original?.evidence ? <WorkbenchEvidence evidence={original.evidence} title="整改前" /> :
+          <WorkbenchEmpty title={original?.loading ? "正在读取整改前资料" : "整改前资料暂不可用"} media>
+            <Link className="fm-wf-link" to={`/backend-workflow?job=${encodeURIComponent(originalJobId || "")}`}>查看原核验记录</Link>
+          </WorkbenchEmpty> : null}
+        <WorkbenchEvidence evidence={detail.evidence} title={remediation ? "整改后" : "现场原件"} />
+      </div>
+      <div className="fm-wf-inspection-side">
+        <section className="fm-wf-subsection">
+          <div className="fm-wf-section-head"><h3>核验摘要</h3>{trial ? <WorkbenchStatus>扩展记录</WorkbenchStatus> : null}</div>
+          <WorkbenchMeta entries={[
+            ["规则初判", ruleVerdict ? labelRuleVerdict(ruleVerdict) : "暂无规则判定"],
+            ["人工复核", labelHumanReviewStatus(job.status)],
+            ["关联工单", workOrderId ? <LinkedWorkOrder id={workOrderId} code={workOrderCode} revision={`${job.status}:${revision}`} /> : "未关联工单"],
+            ["资料来源", remediation ? "整改复验" : "资料提交"],
+            ["处理方式", provenance],
+          ]} />
+          {differences.bad.length ? <p className="fm-wf-observation" data-tone="red">偏差 · {differences.bad.join("、")}</p> : null}
+          {differences.pending.length ? <p className="fm-wf-observation" data-tone="amber">待核对 · {differences.pending.join("、")}</p> : null}
+          {differences.ok.length ? <p className="fm-wf-observation" data-tone="green">已核对 · {differences.ok.join("、")}</p> : null}
+          {observations.length ? <WorkbenchMeta entries={observations.map((item) => [item.label, item.displayValue])} /> : null}
+          {polling && job.status !== "sealing" ? <div className="fm-wf-progress">
+            <span>处理进度</span><progress aria-label="处理进度" value={job.progress} max={100} /><strong>{job.progress}%</strong>
+          </div> : null}
+        </section>
+
+        {needsReview ? <section className="fm-wf-subsection">
+          <div className="fm-wf-section-head"><h3>{attempt ? "复验结论" : "人工复核"}</h3></div>
+          {pendingCases ? <Link className="fm-wf-action-link" to={`/alarms?job=${encodeURIComponent(jobId)}`}>{pendingCases} 项待确认事项 <ArrowUpRight size={14} /></Link> : null}
+          {attempt ? <fieldset className="fm-wf-choices">
+            <legend>整改结果</legend>
+            <label><input type="radio" name="remediation-resolution" checked={resolution === "resolved"} onChange={() => setResolution("resolved")} />已解决</label>
+            <label><input type="radio" name="remediation-resolution" checked={resolution === "not_resolved"} onChange={() => setResolution("not_resolved")} />继续整改</label>
+          </fieldset> : null}
+          <label className="fm-wf-field">复核意见<textarea rows={3} maxLength={1600} className="fm-input" value={reviewNote}
+            onChange={(event) => setReviewNote(event.target.value)} placeholder="填写现场判定或需补充的资料" /></label>
+          <div className="fm-wf-actions">
+            <button type="button" className="fm-button fm-button-primary"
+              disabled={Boolean(busy || pendingCases || (attempt && !resolution))} onClick={() => review("approve")}>
+              {busy === "approve" ? "正在提交…" : attempt && resolution === "resolved" ? "通过并关闭案件" : "通过并封存"}
+            </button>
+            <button type="button" className="fm-button" disabled={Boolean(busy)} onClick={() => review("reject")}>{busy === "reject" ? "正在驳回…" : "驳回"}</button>
+          </div>
+        </section> : null}
+        {attempt && attempt.resolution_decision !== "pending" && !needsReview ? <section className="fm-wf-subsection">
+          <div className="fm-wf-section-head"><h3>已记录的复验结论</h3></div>
+          <WorkbenchMeta entries={[
+            ["整改结果", attempt.resolution_decision === "resolved" ? "已解决" : "仍需整改"],
+            ["复验时间", localTime(attempt.resolved_at)],
+          ]} />
+        </section> : null}
+
+        {job.status === "failed" || canResume || recovery.action === "integrity_review" ? <section className="fm-wf-subsection">
+          <div className="fm-wf-section-head"><h3>任务处置</h3></div>
+          <p className="fm-wf-observation" data-tone={recovery.action === "integrity_review" ? "red" : "amber"}>
+            {recovery.action === "integrity_review" ? "检测到完整性异常，请联系管理员。"
+              : canResume ? "复核记录已保存，证据封存待继续。"
+              : recovery.retryable ? "处理未完成，可重新排队。" : "处理未完成，请检查运行记录。"}
+          </p>
+          {job.status === "failed" && recovery.retryable ? <button type="button" className="fm-button fm-button-primary" disabled={Boolean(busy)}
+            onClick={retry}>{busy === "retry" ? "正在提交…" : "重新排队"}</button> : null}
+          {canResume ? <button type="button" className="fm-button fm-button-primary" disabled={Boolean(busy)}
+            onClick={() => review("approve", true)}>{busy === "seal" ? "正在封存…" : "继续封存"}</button> : null}
+        </section> : null}
+      </div>
+    </div>
+
+    {proof || report ? <section className="fm-wf-archive">
+      <div className="fm-wf-section-head"><h3>报告与证据包</h3>
+        {packageCheck ? <WorkbenchStatus tone={packageCheck.valid ? "green" : "red"}>{packageCheck.valid ? "完整性通过" : "完整性异常"}</WorkbenchStatus>
+          : proof ? <WorkbenchStatus>待完整性校验</WorkbenchStatus> : null}
+      </div>
+      <div className="fm-wf-actions">
+        {report ? <>
+          <Link className="fm-button" to={`/reports?report=${encodeURIComponent(report.id)}`}>查看报告 <ArrowUpRight size={13} /></Link>
+          <button className="fm-button" type="button" disabled={Boolean(busy)} onClick={() => void run("report", () => api.downloadReport(report.id, "html"))}><Download size={14} />下载报告</button>
+          <button className="fm-button" type="button" disabled={Boolean(busy)} onClick={() => void run("report-data", () => api.downloadReport(report.id, "json"))}><Download size={14} />下载报告数据</button>
+        </> : null}
+        {proof ? <>
+          <Link className="fm-button" to={`/traceability?archive=${encodeURIComponent(proof.id)}`}>打开交付档案 <ArrowUpRight size={13} /></Link>
+          <button className="fm-button" type="button" disabled={Boolean(busy)} onClick={() => void run("archive", () => api.downloadArchive(proof.id))}><Download size={14} />下载证据包</button>
+          <button className="fm-button fm-button-primary" type="button" disabled={Boolean(busy)}
+            onClick={() => void run("verify", async () => {
+              const result = await api.verifyProof(proof.id);
+              if (mounted.current) setIntegrity({ proofId: proof.id, result });
+            })}>{busy === "verify" ? "正在校验…" : "校验证据包"}</button>
+        </> : null}
+      </div>
+      {packageCheck ? <p className="fm-wf-muted" aria-live="polite">通过 {Object.values(packageCheck.checks).filter(Boolean).length} 项 · 共 {Object.keys(packageCheck.checks).length} 项</p> : null}
+    </section> : null}
+    <details className="fm-wf-disclosure">
+      <summary>技术详情与运行记录</summary>
+      <WorkbenchMeta entries={[
+        ["任务编号", job.id],
+        ["证据摘要", detail.evidence.sha256],
+        ["处理来源", `${provenance} · ${job.analyzer_version}`],
+        ["执行次数", `${detail.dispatch.attempt_count} / ${detail.dispatch.max_attempts}`],
+        ["恢复记录", recovery.last_error || job.error || "—"],
+        ...(proof ? [["档案编号", proof.archive_id], ["归档摘要", proof.archive_sha256]] as [string, string][] : []),
+      ]} />
+      {detail.attempts.length ? <ul className="fm-wf-log">{detail.attempts.map((item) => <li key={item.id}>
+        <span>执行第 {item.attempt_no} 次</span><time>{localTime(item.claimed_at)}</time>
+        <span>{item.outcome ? item.outcome.error_message || (item.outcome.disposition === "committed_success" ? "处理完成" : "已结束") : "处理中"}</span>
+      </li>)}</ul> : null}
+      {job.result ? <details><summary>结构化记录</summary><pre>{JSON.stringify(job.result, null, 2)}</pre></details> : null}
+      {packageCheck ? <details><summary>逐项校验记录</summary><pre>{JSON.stringify({ checks: packageCheck.checks, errors: packageCheck.errors }, null, 2)}</pre></details> : null}
+    </details>
+  </article>;
+}
+
+function VerificationUpload({ projects, initialProjectId, meta, locked, allowTrial, onClose, onUploaded }: {
+  projects: Project[]; initialProjectId?: string; meta: CapabilityMeta | null; locked?: RemediationContext; allowTrial: boolean;
+  onClose: () => void; onUploaded: (job: VerificationJob) => void;
+}) {
+  const [projectId, setProjectId] = useState(locked?.project.id
+    || (projects.some((item) => item.id === initialProjectId) ? initialProjectId! : projects.length === 1 ? projects[0].id : ""));
+  const [baselines, setBaselines] = useState<Baseline[]>(locked ? [locked.baseline] : []);
+  const [baselineId, setBaselineId] = useState(locked?.baseline.id ?? "");
+  const [file, setFile] = useState<File | null>(null);
+  const [analyzer, setAnalyzer] = useState<AnalyzerName | "">("");
+  const [trialProject, setTrialProject] = useState<Project | null>(null);
+  const [baselineLoading, setBaselineLoading] = useState(false);
+  const [baselineError, setBaselineError] = useState("");
+  const [revision, setRevision] = useState(0);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const busyRef = useRef(false);
+  const trialCode = useRef(`WEB-${Date.now().toString(36).toUpperCase()}`);
+  const active = useRef(false);
+
+  useEffect(() => {
+    active.current = true;
+    return () => { active.current = false; };
   }, []);
 
   useEffect(() => {
-    if (!detail || pollingPaused) return;
-    const analysisIsActive = ["queued", "running"].includes(detail.job.status);
-    const sealingMayBeActive = detail.job.status === "sealing" && !detail.recovery.last_error;
-    if (!analysisIsActive && !sealingMayBeActive) return;
-    const delayMs = Math.min(900 * 2 ** pollFailures, 15_000);
-    const timer = window.setTimeout(() => void refreshJob(detail.job.id), delayMs);
-    return () => window.clearTimeout(timer);
-  }, [detail, pollFailures, pollingPaused, refreshJob]);
+    if (!projectId || locked) return;
+    let current = true;
+    setBaselineLoading(true);
+    setBaselineError("");
+    setBaselines([]);
+    void api.listBaselines(projectId).then((next) => {
+      if (!current) return;
+      setBaselines(next);
+      setBaselineId((prior) => next.some((item) => item.id === prior) ? prior : next.length === 1 ? next[0].id : "");
+    }).catch((reason: unknown) => {
+      if (current) setBaselineError(apiMessage(reason, "设计基线读取失败"));
+    }).finally(() => {
+      if (current) setBaselineLoading(false);
+    });
+    return () => { current = false; };
+  }, [locked, projectId, revision]);
 
-  const currentStep = useMemo(() => {
-    if (integrity) return 5;
-    if (proof || report) return 4;
-    if (detail?.job.status === "sealing") return 4;
-    if (detail?.job.status === "needs_review") return 3;
-    if (detail) return 2;
-    if (file) return 1;
-    if (baseline) return 0;
-    return -1;
-  }, [baseline, detail, file, integrity, proof, report]);
-  const persistedTaskTruth = useMemo(() => detail ? analysisTruthFromJob(detail.job) : null, [detail]);
-  const persistedReportTruth = useMemo(() => report ? reportTruthFromReport(report) : null, [report]);
-  const persistedReportBoundary = useMemo(() => {
-    const boundary = report?.content.truth_boundary;
-    return Array.isArray(boundary)
-      ? boundary.filter((item): item is string => typeof item === "string" && item.length > 0)
-      : [];
-  }, [report]);
+  const remote = meta?.adapters.remote_http;
+  const useRemote = remote?.enabled && (allowTrial || !remote.synthetic);
+  const defaultAnalyzer = useRemote && !remote.synthetic ? "remote_http" : "stub";
+  const availableAnalyzers = [
+    ...(useRemote ? ["remote_http" as const] : []),
+    ...(meta?.adapters.stub?.enabled !== false ? ["stub" as const] : []),
+    ...(allowTrial && meta?.adapters.demo_fixture?.enabled ? ["demo_fixture" as const] : []),
+  ];
+  const selectedAnalyzer = analyzer && availableAnalyzers.includes(analyzer) ? analyzer
+    : availableAnalyzers.includes(defaultAnalyzer) ? defaultAnalyzer : availableAnalyzers[0];
+  const allProjects = trialProject && !projects.some((project) => project.id === trialProject.id)
+    ? [...projects, trialProject] : projects;
+  const selectedBaseline = baselines.find((item) => item.id === baselineId && item.project_id === projectId);
 
-  const bootstrap = async () => {
-    if (activeActionRef.current !== null) return;
-    if (isRemediationMode) {
-      setError("整改复验模式禁止创建匿名项目，请使用链接锁定的原案件项目与设计基线");
-      return;
-    }
-    const action = beginAction("bootstrap");
-    if (!action) return;
-    setError(null);
+  const transact = async (name: string, action: () => Promise<void>) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(name);
+    setError("");
     try {
-      const suffix = Date.now().toString().slice(-8);
-      const createdProject = await api.createProject({
-        code: `WEB-${suffix}`,
-        name: "匿名化隐蔽工程联调项目",
-        location: "匿名化测试工点",
-        manager: "网页联调审核员",
-      });
-      const createdBaseline = await api.createBaseline(createdProject.id, {
-        site_id: "SITE-A12",
-        procedure_code: "TRENCH-BEFORE-BACKFILL",
-        version: "design-v1",
-        source_type: "manual",
-        expected: {
-          scene_type: "trench",
-          measurements: {
-            min_depth_m: 0.8,
-            min_spacing_m: 0.2,
-            expected_quantity: 4,
-            expected_specification: "PE110 x 4",
-          },
-        },
-      });
-      if (!actionIsCurrent(action)) return;
-      setProject(createdProject);
-      setBaseline(createdBaseline);
-      setDetail(null);
-      setReport(null);
-      setProof(null);
-      setIntegrity(null);
+      await action();
     } catch (reason) {
-      if (actionIsCurrent(action)) {
-        setError(reason instanceof Error ? reason.message : "工程基线初始化失败");
-      }
+      if (active.current) setError(apiMessage(reason, "操作未能完成"));
     } finally {
-      finishAction(action);
+      busyRef.current = false;
+      if (active.current) setBusy("");
     }
   };
 
-  const submit = async () => {
-    if (activeActionRef.current !== null) return;
-    if (!project || !baseline || !file) return;
-    if (remediationAttemptId && !isRemediationMode) {
-      setError("整改复验必须从告警与整改页的具体 Attempt 进入，不能手工绑定到匿名项目");
-      return;
-    }
-    if (isRemediationMode) {
-      if (!remediationCaseDetail || !remediationAttempt) {
-        setError("原案件或 Attempt 尚未通过校验，不能上传复验证据");
-        return;
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!projectId || !selectedBaseline || !file || !selectedAnalyzer) return;
+    if (locked && (locked.detail.case.status !== "remediation_in_progress" || locked.attempt.resolution_decision !== "pending"
+      || locked.attempt.verification_job_id || locked.baseline.id !== selectedBaseline.id || locked.project.id !== projectId)) return;
+    void transact("upload", async () => {
+      let job: VerificationJob;
+      try {
+        job = await api.uploadVerification({ projectId, baselineId, file, analyzer: selectedAnalyzer, remediationAttemptId: locked?.attempt.id });
+      } catch (reason) {
+        if (!locked || isAuthError(reason)) throw reason;
+        const fresh = await api.findingCase(locked.detail.case.id).catch(() => null);
+        const bound = fresh?.attempts.find((item) => item.id === locked.attempt.id)?.verification_job_id;
+        if (!bound) throw reason;
+        job = (await api.verification(bound)).job;
       }
-      if (remediationAttempt.verification_job_id) {
-        setError("该 Attempt 已绑定复验任务，不能重复上传");
-        return;
-      }
-      if (remediationAttempt.resolution_decision !== "pending" || remediationCaseDetail.case.status !== "remediation_in_progress") {
-        setError("该 Attempt 当前不处于可上传复验证据的状态");
-        return;
-      }
-      if (project.id !== remediationCaseDetail.case.project_id || baseline.id !== remediationCaseDetail.case.baseline_id) {
-        setError("当前项目或基线与原案件不一致，已阻止复验证据上传");
-        return;
-      }
-    }
-    const action = beginAction("upload");
-    if (!action) return;
-    setError(null);
-    setPollError(null);
-    setIntegrity(null);
-    setRemediationResolution("");
-    try {
-      const job = await api.uploadVerification({
-        projectId: project.id,
-        baselineId: baseline.id,
-        file,
-        analyzer,
-        remediationAttemptId: remediationAttemptId || undefined,
+      if (active.current) onUploaded(job);
+    });
+  };
+
+  const createTrialBaseline = () => void transact("trial", async () => {
+    let project = trialProject || (await api.listProjects()).find((item) => item.code === trialCode.current);
+    if (!project) {
+      project = await api.createProject({
+        code: trialCode.current, name: "现场核验工作区", location: "现场工点", manager: "网页复核员",
       });
-      if (!actionIsCurrent(action)) return;
-      activeJobIdRef.current = job.id;
-      if (isRemediationMode) {
-        setRemediationCaseDetail((current) => current ? {
-          ...current,
-          case: { ...current.case, status: "verification_pending" },
-          attempts: current.attempts.map((item) => item.id === remediationAttemptId
-            ? { ...item, verification_job_id: job.id }
-            : item),
-        } : current);
-      }
-      setDetail({
-        job,
-        dispatch: {
-          execution_mode: meta?.verification_execution.mode || "inline",
-          state: "unclaimed",
-          generation: 0,
-          attempt_count: 0,
-          max_attempts: meta?.verification_execution.max_attempts || 3,
-          heartbeat_at: null,
-          lease_expires_at: null,
-        },
-        attempts: [],
-        evidence: { id: "pending", original_name: file.name, content_type: file.type, size_bytes: file.size, sha256: "计算中", metadata: {} },
-        report: null,
-        proof: null,
-        remediation_attempt: null,
-        recovery: {
-          action: "none",
-          retryable: false,
-          reason: "任务刚创建，等待后端返回持久化恢复状态。",
-          operation_state: null,
-          attempt_count: 0,
-          last_error: null,
-          updated_at: null,
-        },
+    }
+    if (!active.current) return;
+    setTrialProject(project);
+    const existing = await api.listBaselines(project.id);
+    const baseline = existing.find((item) => item.site_id === "SITE-A12" && item.version === "design-v1")
+      ?? await api.createBaseline(project.id, {
+        site_id: "SITE-A12", procedure_code: "TRENCH-BEFORE-BACKFILL", version: "design-v1", source_type: "manual",
+        expected: { scene_type: "trench", measurements: {
+          min_depth_m: 0.8, min_spacing_m: 0.2, expected_quantity: 4, expected_specification: "PE110 x 4",
+        } },
       });
-      await refreshJob(job.id);
-    } catch (reason) {
-      if (actionIsCurrent(action)) {
-        setError(reason instanceof Error ? reason.message : "证据提交失败");
-      }
-    } finally {
-      finishAction(action);
-    }
-  };
-
-  const review = async (decision: "approve" | "reject") => {
-    if (activeActionRef.current !== null) return;
-    const currentDetail = detail;
-    if (!currentDetail) return;
-    if (!currentContextOwnsJob(currentDetail.job.id)) {
-      setError("任务上下文已经变化，已阻止对旧任务执行复核");
-      return;
-    }
-    if (currentDetail.remediation_attempt && decision === "approve" && !remediationResolution) {
-      setError("请先明确选择整改复验结论，再批准记录");
-      return;
-    }
-    const action = beginAction("review");
-    if (!action) return;
-    setError(null);
-    try {
-      const outcome = await api.review(currentDetail.job.id, {
-        decision,
-        reviewer: "网页联调审核员",
-        note: currentDetail.remediation_attempt
-          ? `${analysisTruthFromJob(currentDetail.job).reviewNote}\n${decision === "approve" ? `整改复验人工判定：${remediationResolution === "resolved" ? "已解决" : "未解决"}。` : "整改复验任务被驳回，本次不执行案件关闭判定。"}`
-          : analysisTruthFromJob(currentDetail.job).reviewNote,
-        remediation_resolution: currentDetail.remediation_attempt && decision === "approve"
-          ? remediationResolution || undefined
-          : undefined,
-      });
-      if (!actionIsCurrent(action) || activeJobIdRef.current !== currentDetail.job.id) return;
-      setReport(outcome.report);
-      setProof(outcome.proof);
-      await refreshJob(currentDetail.job.id);
-    } catch (reason) {
-      if (!actionIsCurrent(action) || activeJobIdRef.current !== currentDetail.job.id) return;
-      setError(reason instanceof Error ? reason.message : "复核提交失败");
-      await refreshJob(currentDetail.job.id);
-    } finally {
-      finishAction(action);
-    }
-  };
-
-  const retry = async () => {
-    if (activeActionRef.current !== null) return;
-    const currentDetail = detail;
-    if (!currentDetail || currentDetail.job.status !== "failed" || !currentDetail.recovery.retryable) return;
-    if (!currentContextOwnsJob(currentDetail.job.id)) {
-      setError("任务上下文已经变化，已阻止对旧任务重新排队");
-      return;
-    }
-    const action = beginAction("retry");
-    if (!action) return;
-    setError(null);
-    try {
-      const retried = await api.retryVerification(currentDetail.job.id);
-      if (!actionIsCurrent(action) || activeJobIdRef.current !== currentDetail.job.id) return;
-      setDetail((current) => current ? { ...current, job: retried } : current);
-      await refreshJob(retried.id);
-    } catch (reason) {
-      if (!actionIsCurrent(action) || activeJobIdRef.current !== currentDetail.job.id) return;
-      setError(reason instanceof Error ? reason.message : "失败任务重新排队失败");
-    } finally {
-      finishAction(action);
-    }
-  };
-
-  const resumeSealing = async () => {
-    if (activeActionRef.current !== null) return;
-    const currentDetail = detail;
-    if (!currentDetail || currentDetail.recovery.action !== "resume_sealing" || !currentDetail.recovery.retryable) return;
-    if (!currentContextOwnsJob(currentDetail.job.id)) {
-      setError("任务上下文已经变化，已阻止继续旧任务的封存操作");
-      return;
-    }
-    const persistedAttempt = currentDetail.remediation_attempt;
-    const persistedResolution = persistedAttempt?.resolution_decision;
-    if (persistedAttempt && persistedResolution !== "resolved" && persistedResolution !== "not_resolved") {
-      setError("整改复验尚未持久化明确结论，不能绕过人工判断继续封存");
-      return;
-    }
-    const action = beginAction("resume-sealing");
-    if (!action) return;
-    setError(null);
-    try {
-      const outcome = await api.review(currentDetail.job.id, {
-        decision: "approve",
-        reviewer: "网页封存恢复复核员",
-        note: persistedAttempt?.resolution_note || "继续既有人工复核对应的可恢复封存操作。",
-        remediation_resolution: persistedResolution === "resolved" || persistedResolution === "not_resolved"
-          ? persistedResolution
-          : undefined,
-      });
-      if (!actionIsCurrent(action) || activeJobIdRef.current !== currentDetail.job.id) return;
-      setReport(outcome.report);
-      setProof(outcome.proof);
-      await refreshJob(currentDetail.job.id);
-    } catch (reason) {
-      if (!actionIsCurrent(action) || activeJobIdRef.current !== currentDetail.job.id) return;
-      setError(reason instanceof Error ? reason.message : "继续封存失败");
-      await refreshJob(currentDetail.job.id);
-    } finally {
-      finishAction(action);
-    }
-  };
-
-  const verify = async () => {
-    if (activeActionRef.current !== null) return;
-    const currentProof = proof;
-    const currentDetail = detail;
-    if (!currentProof || !currentDetail || !currentContextOwnsJob(currentDetail.job.id)) return;
-    const action = beginAction("verify");
-    if (!action) return;
-    setError(null);
-    try {
-      const result = await api.verifyProof(currentProof.id);
-      if (
-        !actionIsCurrent(action)
-        || activeJobIdRef.current !== currentDetail.job.id
-        || currentProof.id !== proof?.id
-      ) return;
-      setIntegrity(result);
-    } catch (reason) {
-      if (!actionIsCurrent(action) || activeJobIdRef.current !== currentDetail.job.id) return;
-      setError(reason instanceof Error ? reason.message : "证据校验失败");
-    } finally {
-      finishAction(action);
-    }
-  };
-
-  return (
-    <div className="space-y-5 page-enter">
-      <section className="relative overflow-hidden rounded-[30px] border border-sky-300/30 brand-hero px-6 py-7 text-white shadow-[0_26px_90px_-45px_rgba(3,105,161,0.9)]">
-        <div className="absolute inset-0 opacity-60 [background-image:linear-gradient(rgba(56,189,248,.07)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,.07)_1px,transparent_1px)] [background-size:32px_32px]" />
-        <div className="absolute -right-20 -top-28 h-72 w-72 rounded-full bg-sky-400/20 blur-3xl" />
-
-        {/* 主布局：大屏左文右标签，小屏上下堆叠 */}
-        <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] xl:items-end">
-
-          {/* 左侧描述区域 */}
-          <div className="max-w-3xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-medium text-cyan-100">
-              <ShieldIcon className="h-4 w-4" /> 工程核验 · 全链路可追溯
-            </div>
-            <h2 className="text-3xl font-semibold tracking-tight">核验有据，追溯可查</h2>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
-              本页展示完整核验闭环：原始证据上传 → 服务端校验 → 结构化处理 → 人工复核 → 报告与证据包封装，全程可追溯、可审计。
-            </p>
-          </div>
-
-          {/* 右侧标签网格 */}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6 rounded-3xl border border-white/10 bg-white/5 p-3 backdrop-blur">
-            {[
-              ["API", health === "ready" ? "在线" : health === "offline" ? "离线" : "检查中"],
-              [
-                "结构",
-                !meta
-                  ? "检查中"
-                  : meta.database_schema.mode === "create_all"
-                    ? "开发直建"
-                    : meta.database_schema.at_head && meta.database_schema.drift_free
-                      ? "迁移已校验"
-                      : "结构异常",
-              ],
-              ["执行", meta?.verification_execution.mode === "external" ? "独立 Worker" : "单进程演示"],
-              ["调度", operations ? operationsStatusLabel[operations.status] : operationsError ? "读取失败" : "待刷新"],
-              ["算法", persistedTaskTruth?.label || "尚未提交任务"],
-              ["存证", "本地哈希链"],
-            ].map(([label, value]) => (
-              <div key={label} className="min-w-0 rounded-2xl bg-white/10 px-2 py-2 sm:px-3 sm:py-3">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-sky-300">{label}</p>
-                <p className="mt-1 text-xs font-semibold text-white sm:text-sm break-words whitespace-normal" title={value}>
-                  {value}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
-        <div className="grid gap-3 md:grid-cols-6">
-          {workflowSteps.map((step, index) => (
-            <div
-              key={step}
-              className={cn(
-                "relative rounded-[20px] border px-3 py-4 transition-all",
-                index <= currentStep ? "border-sky-200 bg-sky-50" : "border-slate-200 bg-slate-50"
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-400">0{index + 1}</span>
-                <span className={cn("h-2.5 w-2.5 rounded-full", index <= currentStep ? "bg-sky-500" : "bg-slate-300")} />
-              </div>
-              <p className="mt-3 text-sm font-semibold text-slate-800">{step}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <form className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm" onSubmit={(event) => event.preventDefault()}>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-          <div className="flex-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">本地演示鉴权</p>
-            <p className="mt-2 text-sm leading-6 text-slate-500">操作员只能创建和上传；复核员才能批准并封存。生产环境应改为真实登录/JWT，这里使用角色分离的 API Key。</p>
-          </div>
-          <label className="w-full min-w-0 flex-1 text-xs font-semibold text-slate-600 lg:min-w-64">操作员 Key
-            <input type="password" autoComplete="new-password" value={operatorToken} onChange={(event) => {
-              const value = event.target.value;
-              setOperatorToken(value);
-            }} placeholder="FENGMOU_OPERATOR_API_KEY" className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 font-mono text-sm outline-none focus:border-sky-400" />
-          </label>
-          <label className="w-full min-w-0 flex-1 text-xs font-semibold text-slate-600 lg:min-w-64">复核员 Key
-            <input type="password" autoComplete="new-password" value={reviewerToken} onChange={(event) => {
-              const value = event.target.value;
-              setReviewerToken(value);
-            }} placeholder="FENGMOU_REVIEWER_API_KEY" className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 font-mono text-sm outline-none focus:border-sky-400" />
-          </label>
-        </div>
-      </form>
-
-      <section
-        aria-labelledby="verification-operations-title"
-        className="relative overflow-hidden rounded-[28px] border border-white/15 brand-hero text-white shadow-[0_22px_65px_-42px_rgba(15,23,42,0.95)]"
-      >
-        <div className="absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(148,163,184,.06)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.06)_1px,transparent_1px)] [background-size:24px_24px]" />
-        <div className="relative border-b border-white/10 px-5 py-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-2.5 text-cyan-200">
-                <AnalyticsIcon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold tracking-[0.24em] text-cyan-300">调度运维</p>
-                <h3 id="verification-operations-title" className="mt-1 text-lg font-semibold tracking-tight">调度健康 · 数据库时点快照</h3>
-                <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-400">
-                  聚合排队、租约、死信与近期 fencing 信号；业务积压只标记“需要关注”，完整性矛盾才是事故。
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {operations ? (
-                <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", operationsStatusTone[operations.status])}>
-                  {operationsStatusLabel[operations.status]}
-                </span>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => void refreshOperations()}
-                disabled={!operatorToken.trim() || operationsLoading}
-                className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-cyan-300/40 hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {operationsLoading ? "读取中…" : "刷新快照"}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="relative p-5">
-          {!operatorToken.trim() ? (
-            <div className="rounded-2xl border border-dashed border-white/25 bg-white/5 px-4 py-5 text-sm text-slate-300">
-              输入操作员 Key 后才能读取聚合调度状态；该端点不会公开任务 ID 或 Worker 标识。
-            </div>
-          ) : null}
-
-          {operationsError ? (
-            <div role="alert" className="rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
-              {operationsError}
-            </div>
-          ) : null}
-
-          {operations ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-                {[
-                  {
-                    label: "排队任务",
-                    value: operations.jobs.by_status.queued || 0,
-                    note: `最久 ${formatOperationalAge(operations.dispatch.oldest_queued_seconds)} · 超阈值 ${operations.dispatch.queued_over_warning_threshold}`,
-                  },
-                  {
-                    label: "活跃租约",
-                    value: operations.dispatch.active_leases,
-                    note: `最久心跳龄 ${formatOperationalAge(operations.dispatch.oldest_active_heartbeat_seconds)}`,
-                  },
-                  {
-                    label: "死信任务",
-                    value: operations.dispatch.dead_letter_jobs,
-                    note: "不会被启动恢复自动复活",
-                  },
-                  {
-                    label: "近期租约波动",
-                    value: operations.attempts.recent_instability,
-                    note: `${Math.round(operations.thresholds.recent_window_seconds / 60)} 分钟观察窗`,
-                  },
-                ].map((metric) => (
-                  <div key={metric.label} className="min-w-0 border-l-2 border-cyan-300/40 bg-white/[0.045] px-4 py-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{metric.label}</p>
-                    <p className="mt-2 font-mono text-2xl font-semibold tabular-nums text-white">{metric.value}</p>
-                    <p className="mt-1 truncate text-[11px] text-slate-400" title={metric.note}>{metric.note}</p>
-                  </div>
-                ))}
-              </div>
-
-              {operations.alerts.length ? (
-                <div className="grid gap-2 lg:grid-cols-2">
-                  {operations.alerts.map((alert) => {
-                    const copy = operationsAlertCopy[alert.code];
-                    return (
-                      <div
-                        key={alert.code}
-                        className={cn(
-                          "flex items-start gap-3 rounded-2xl border px-4 py-3",
-                          alert.severity === "incident"
-                            ? "border-rose-300/25 bg-rose-400/10"
-                            : "border-amber-300/20 bg-amber-300/[0.08]",
-                        )}
-                      >
-                        <span className={cn(
-                          "mt-0.5 rounded-lg px-2 py-1 font-mono text-xs font-semibold tabular-nums",
-                          alert.severity === "incident" ? "bg-rose-300/15 text-rose-100" : "bg-amber-300/10 text-amber-100",
-                        )}>
-                          ×{alert.count}
-                        </span>
-                        <div>
-                          <p className={cn("text-sm font-semibold", alert.severity === "incident" ? "text-rose-100" : "text-amber-100")}>{copy.label}</p>
-                          <p className="mt-1 text-xs leading-5 text-slate-400">{copy.detail}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.06] px-4 py-3 text-sm text-emerald-100">
-                  <CheckIcon className="h-4 w-4" /> 当前快照没有调度告警。
-                </div>
-              )}
-
-              <div className="flex flex-col gap-1 border-t border-white/10 pt-3 text-[11px] leading-5 text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-                <span></span>
-                <span className="font-mono">
-                  {new Date(operations.generated_at).toLocaleString("zh-CN", { hour12: false })} · 完整性问题 {operations.integrity.issue_count}
-                </span>
-              </div>
-            </div>
-          ) : operationsLoading ? (
-            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4" aria-label="正在读取调度快照">
-              {[0, 1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse bg-white/[0.045]" />)}
-            </div>
-          ) : null}
-        </div>
-      </section>
-
-      {error ? (
-        <div role="alert" className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          <XIcon className="mt-0.5 h-4 w-4" /><span>{error}</span>
-        </div>
-      ) : null}
-      {pollError ? (
-        <div role="alert" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <InfoIcon className="mt-0.5 h-4 w-4" /><span>{pollError}</span>
-        </div>
-      ) : null}
-      {remediationContextError ? (
-        <div role="alert" className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          <XIcon className="mt-0.5 h-4 w-4" /><span>{remediationContextError}。本页不会回退创建匿名项目。</span>
-        </div>
-      ) : null}
-
-      <div className="grid gap-5 xl:grid-cols-2 xl:items-start">
-
-        {/* =========================================================
-      左列：01 → 03
-      大屏：
-        01
-        ↓ gap-5
-        03
-      小屏通过 order 恢复为 01 → 02 → 03 → 04
-      ========================================================= */}
-
-        <div className="contents xl:flex xl:flex-col xl:gap-5">
-
-          {/* 01 / 工程语义锚点 */}
-          <section className="order-1 rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm xl:order-none">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
-                  01 / 工程语义锚点
-                </p>
-                <h3 className="mt-2 text-lg font-semibold text-slate-900">
-                  {isRemediationMode
-                    ? "锁定原案件项目与设计基线"
-                    : "创建匿名项目与设计基线"}
-                </h3>
-                <p className="mt-1 text-sm leading-6 text-slate-500">
-                  {isRemediationMode
-                    ? "整改复验必须复用原案件的项目和基线，当前页面不允许替换。"
-                    : "每个证据必须绑定项目、工点、工序和基线版本。"}
-                </p>
-              </div>
-
-              <DatabaseIcon className="h-6 w-6 text-sky-600" />
-            </div>
-
-            {baseline && project ? (
-              <div className="mt-4 space-y-3 rounded-[22px] border border-emerald-200 bg-emerald-50 p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
-                  <CheckIcon className="h-4 w-4" />
-                  {isRemediationMode
-                    ? "原案件项目与基线已锁定"
-                    : "基线已持久化"}
-                </div>
-
-                <p className="text-sm text-slate-700">
-                  {project.name} · {baseline.site_id}
-                </p>
-
-                <p className="break-all font-mono text-[11px] text-slate-500">
-                  Project ID: {project.id}
-                </p>
-
-                <p className="break-all font-mono text-[11px] text-slate-500">
-                  Baseline ID: {baseline.id}
-                </p>
-
-                <p className="break-all font-mono text-[11px] text-slate-500">
-                  {baseline.sha256}
-                </p>
-
-                {remediationCaseDetail && remediationAttempt ? (
-                  <div className="rounded-[18px] border border-violet-200 bg-white p-3 text-violet-900">
-                    <p className="text-xs font-semibold">
-                      {remediationCaseDetail.case.finding_code} · Attempt #{remediationAttempt.attempt_no}
-                    </p>
-
-                    <p className="mt-2 text-xs leading-5 text-violet-700">
-                      {remediationAttempt.action_description}
-                    </p>
-
-                    <p className="mt-2 break-all font-mono text-[11px] text-violet-600">
-                      Case ID: {remediationCaseDetail.case.id}
-                    </p>
-
-                    <p className="mt-1 break-all font-mono text-[11px] text-violet-600">
-                      Attempt ID: {remediationAttempt.id}
-                    </p>
-
-                    <p className="mt-1 text-[11px] text-violet-600">
-                      案件状态：{remediationCaseDetail.case.status} · Attempt 结论：{remediationAttempt.resolution_decision}
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            ) : isRemediationMode ? (
-              <div className="mt-5 rounded-[22px] border border-violet-200 bg-violet-50 p-4 text-sm text-violet-800">
-                {remediationContextLoading
-                  ? "正在读取并校验原案件、项目、设计基线与 Attempt…"
-                  : !operatorToken.trim()
-                    ? "请输入操作员 Key，以读取并锁定原案件项目与设计基线。"
-                    : "原案件上下文尚未通过校验，禁止初始化匿名项目。"}
-              </div>
-            ) : (
-              <button
-                disabled={busy !== null || health !== "ready" || !operatorToken.trim()}
-                onClick={bootstrap}
-                className="mt-5 w-full rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {busy === "bootstrap" ? "正在创建..." : "初始化匿名演示工点"}
-              </button>
-            )}
-          </section>
-
-
-          {/* 03 / 任务与结果 */}
-          <section className="order-3 rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm xl:order-none">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
-                  03 / 任务与结果
-                </p>
-
-                <h3 className="mt-2 text-lg font-semibold text-slate-900">
-                  持久化处理状态
-                </h3>
-              </div>
-
-              {detail ? (
-                <span
-                  className={cn(
-                    "rounded-full px-3 py-1 text-xs font-semibold",
-                    detail.job.status === "failed"
-                      ? "bg-danger-light text-danger"
-                      : detail.job.status === "approved"
-                        ? "bg-success-light text-success"
-                        : detail.job.status === "needs_review"
-                          ? "bg-warning-light text-warning"
-                          : "bg-slate-100 text-slate-700"
-                  )}
-                >
-                  {statusLabel[detail.job.status] || detail.job.status}
-                </span>
-              ) : null}
-            </div>
-
-            {!detail ? (
-              <div className="mt-5 flex min-h-52 flex-col items-center justify-center rounded-[24px] border border-slate-200 bg-slate-50 text-center">
-                <AnalyticsIcon className="h-8 w-8 text-slate-300" />
-                <p className="mt-3 text-sm font-medium text-slate-500">
-                  提交文件后显示真实任务状态与输出
-                </p>
-              </div>
-            ) : (
-              <div className="mt-5 space-y-4">
-
-                {/* 任务进度条 */}
-                <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>任务进度</span>
-                    <span>{detail.job.progress}%</span>
-                  </div>
-
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-all",
-                        detail.job.status === "failed"
-                          ? "bg-danger"
-                          : detail.job.status === "approved"
-                            ? "bg-success"
-                            : detail.job.status === "needs_review"
-                              ? "bg-warning"
-                              : "bg-sky-500"
-                      )}
-                      style={{ width: `${detail.job.progress}%` }}
-                    />
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div>
-                      <p className="text-xs text-slate-400">原始文件摘要</p>
-                      <p className="mt-1 break-all font-mono text-[11px] text-slate-700">
-                        {detail.evidence.sha256}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-slate-400">持久化任务适配器</p>
-                      <p className="mt-1 text-sm font-semibold text-slate-700">
-                        {detail.job.analyzer_name}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-slate-400">算法版本</p>
-                      <p className="mt-1 text-sm font-semibold text-slate-700">
-                        {detail.job.analyzer_version}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-slate-400">执行器租约 / 尝试预算</p>
-                      <p className="mt-1 text-sm font-semibold text-slate-700">
-                        {detail.dispatch.execution_mode === "external" ? "独立" : "内联"} ·{" "}
-                        {dispatchStateLabel[detail.dispatch.state]} ·{" "}
-                        {detail.dispatch.attempt_count}/{detail.dispatch.max_attempts}
-                      </p>
-
-                      {detail.dispatch.lease_expires_at ? (
-                        <p className="mt-1 text-[11px] text-slate-500">
-                          租约至{" "}
-                          {new Date(detail.dispatch.lease_expires_at).toLocaleTimeString(
-                            "zh-CN",
-                            { hour12: false }
-                          )}
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3 text-[11px] text-slate-500">
-                    <span>
-                      {pollingPaused
-                        ? "自动轮询已暂停，请检查操作员 API Key 后手动刷新。"
-                        : pollFailures > 0
-                          ? `状态读取连续失败 ${pollFailures} 次，已指数退避，最长 15 秒。`
-                          : lastRefreshAt
-                            ? `最近成功读取：${lastRefreshAt.toLocaleTimeString("zh-CN", {
-                              hour12: false,
-                            })}`
-                            : "等待首次从后端读取任务状态。"}
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPollingPaused(false);
-                        setPollFailures(0);
-                        void refreshJob(detail.job.id);
-                      }}
-                      className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 hover:border-sky-400 hover:text-sky-700"
-                    >
-                      手动刷新
-                    </button>
-                  </div>
-                </div>
-
-                {/* Worker 尝试账本 */}
-                <section
-                  className="overflow-hidden rounded-[22px] border border-slate-200 panel-card"
-                  aria-labelledby="verification-attempt-history-title"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 bg-[#0d3f86] px-4 py-3 text-white">
-                    <div>
-                      <p
-                        id="verification-attempt-history-title"
-                        className="text-sm font-semibold"
-                      >
-                        Worker 尝试
-                      </p>
-
-                      <p className="mt-1 text-[11px] leading-5 text-slate-300">
-                        每次领取与终态只追加一次；原始 Worker 标识不返回前端。
-                      </p>
-                    </div>
-
-                    <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 font-mono text-[11px] text-cyan-100">
-                      {detail.attempts.length} records
-                    </span>
-                  </div>
-
-                  {detail.attempts.length ? (
-                    <ol className="divide-y divide-slate-200">
-                      {detail.attempts.map((attempt) => {
-                        const outcome = attempt.outcome;
-
-                        return (
-                          <li
-                            key={attempt.id}
-                            className="relative px-4 py-4 sm:pl-12"
-                          >
-                            <span className="absolute left-4 top-5 hidden h-5 w-5 items-center justify-center rounded-full border-2 border-sky-500 bg-white font-mono text-[9px] font-bold text-sky-700 sm:flex">
-                              {attempt.attempt_no}
-                            </span>
-
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-slate-900">
-                                  Attempt #{attempt.attempt_no}
-                                  <span className="ml-2 font-mono text-[11px] font-normal text-slate-400">
-                                    generation {attempt.generation}
-                                  </span>
-                                </p>
-
-                                <p className="mt-1 text-[11px] text-slate-500">
-                                  {new Date(attempt.claimed_at).toLocaleString("zh-CN", {
-                                    hour12: false,
-                                  })}{" "}
-                                  ·{" "}
-                                  {attempt.execution_mode === "external"
-                                    ? "独立 Worker"
-                                    : "内联 Worker"}{" "}
-                                  · {attempt.analyzer_name}@{attempt.analyzer_version}
-                                </p>
-                              </div>
-
-                              {outcome ? (
-                                <span
-                                  className={cn(
-                                    "rounded-full border px-2.5 py-1 text-[11px] font-semibold",
-                                    attemptDispositionTone[outcome.disposition]
-                                  )}
-                                >
-                                  {attemptDispositionLabel[outcome.disposition]}
-                                </span>
-                              ) : (
-                                <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
-                                  执行中
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="mt-3 grid gap-2 text-[11px] text-slate-600 sm:grid-cols-2">
-                              <p>
-                                <span className="text-slate-400">执行器编号</span>
-                                <span
-                                  className="ml-2 font-mono"
-                                  title={attempt.worker_ref}
-                                >
-                                  {shortWorkerRef(attempt.worker_ref)}
-                                </span>
-                              </p>
-
-                              <p>
-                                <span className="text-slate-400">当次预算</span>
-                                <span className="ml-2 font-mono">
-                                  {attempt.attempt_no}/{attempt.max_attempts}
-                                </span>
-                              </p>
-
-                              {outcome?.stage ? (
-                                <p>
-                                  <span className="text-slate-400">终态阶段</span>
-                                  <span className="ml-2 font-mono">
-                                    {outcome.stage}
-                                  </span>
-                                </p>
-                              ) : null}
-
-                              {outcome ? (
-                                <p>
-                                  <span className="text-slate-400">结束时间</span>
-                                  <span className="ml-2">
-                                    {new Date(outcome.finished_at).toLocaleString(
-                                      "zh-CN",
-                                      { hour12: false }
-                                    )}
-                                  </span>
-                                </p>
-                              ) : null}
-                            </div>
-
-                            {outcome?.result_sha256 ? (
-                              <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-700">
-                                  Result SHA-256
-                                </p>
-
-                                <p className="mt-1 break-all font-mono text-[11px] text-emerald-900">
-                                  {outcome.result_sha256}
-                                </p>
-                              </div>
-                            ) : null}
-
-                            {outcome?.error_code ? (
-                              <div className="mt-3 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-[11px] text-rose-800">
-                                <p className="font-mono font-semibold">
-                                  {outcome.error_code} ·{" "}
-                                  {outcome.error_retryable ? "可重试" : "不可重试"}
-                                  {outcome.dead_lettered ? " · 已进入死信" : ""}
-                                </p>
-
-                                {outcome.error_message ? (
-                                  <p className="mt-1 break-words leading-5">
-                                    {outcome.error_message}
-                                  </p>
-                                ) : null}
-                              </div>
-                            ) : null}
-
-                            <details className="mt-3 text-[11px] text-slate-500">
-                              <summary className="cursor-pointer font-semibold text-slate-600 hover:text-sky-700">
-                                查看不可变输入摘要
-                              </summary>
-
-                              <div className="mt-2 space-y-1 rounded-xl bg-slate-50 px-3 py-2 font-mono">
-                                <p className="break-all">
-                                  evidence {attempt.evidence_sha256}
-                                </p>
-                                <p className="break-all">
-                                  baseline {attempt.baseline_sha256}
-                                </p>
-                                <p className="break-all">
-                                  attempt {attempt.id}
-                                </p>
-                              </div>
-                            </details>
-                          </li>
-                        );
-                      })}
-                    </ol>
-                  ) : (
-                    <div className="px-4 py-5 text-sm text-slate-500">
-                      任务尚未被 Worker 领取，因此还没有尝试记录。
-                    </div>
-                  )}
-                </section>
-
-                {detail.job.result ? (
-                  <AnalysisTruthPanel job={detail.job} />
-                ) : null}
-
-                {detail.job.status === "failed" ? (
-                  <div className="rounded-[22px] border border-rose-200 bg-rose-50 p-4">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-rose-800">
-                      <XIcon className="h-4 w-4" /> 分析任务失败
-                    </div>
-
-                    <p className="mt-2 break-words text-xs leading-5 text-rose-700">
-                      {detail.job.error || "服务端未提供失败原因。"}
-                    </p>
-
-                    <p className="mt-2 text-xs leading-5 text-rose-600">
-                      {detail.recovery.reason}{" "}
-                      {detail.dispatch.state === "dead_letter"
-                        ? "该任务不会被启动恢复再次执行。"
-                        : "重试会复用原始证据、设计基线、算法版本和稳定幂等键。"}
-                    </p>
-
-                    <button
-                      type="button"
-                      disabled={
-                        busy !== null ||
-                        !operatorToken.trim() ||
-                        !detail.recovery.retryable
-                      }
-                      onClick={() => void retry()}
-                      className="mt-3 rounded-2xl bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-                    >
-                      {busy === "retry"
-                        ? "正在重新排队…"
-                        : detail.recovery.retryable
-                          ? "检查原因后显式重试"
-                          : "当前配置不允许重试"}
-                    </button>
-                  </div>
-                ) : null}
-
-                {detail.recovery.action === "resume_sealing" ? (
-                  <div
-                    className="rounded-[22px] border border-amber-300 bg-amber-50 p-4"
-                    role="status"
-                  >
-                    <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
-                      <InfoIcon className="h-4 w-4" /> 封存尚未完成，当前没有可交付的新报告或证据包
-                    </div>
-
-                    <p className="mt-2 text-xs leading-5 text-amber-800">
-                      后端持久态：{detail.recovery.operation_state || "unknown"} ·
-                      已尝试 {detail.recovery.attempt_count} 次。
-                      {detail.recovery.reason}
-                    </p>
-
-                    {detail.recovery.last_error ? (
-                      <p className="mt-2 break-words rounded-xl bg-white/70 px-3 py-2 font-mono text-[11px] leading-5 text-amber-900">
-                        {detail.recovery.last_error}
-                      </p>
-                    ) : null}
-
-                    <p className="mt-2 text-xs leading-5 text-amber-700">
-                      继续操作会复用已冻结的复核、报告 ID、档案 ID 与账本记录；不会重新生成一套业务结论。
-                    </p>
-
-                    <button
-                      type="button"
-                      disabled={busy !== null || !reviewerToken.trim()}
-                      onClick={() => void resumeSealing()}
-                      className="mt-3 rounded-2xl bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-                    >
-                      {busy === "resume-sealing" ? "正在继续封存…" : "复核员继续封存"}
-                    </button>
-                  </div>
-                ) : null}
-
-                {detail.recovery.action === "integrity_review" ? (
-                  <div
-                    className="rounded-[22px] border border-rose-300 bg-rose-50 p-4"
-                    role="alert"
-                  >
-                    <div className="flex items-center gap-2 text-sm font-semibold text-rose-900">
-                      <XIcon className="h-4 w-4" /> 完整性异常，禁止自动继续
-                    </div>
-
-                    <p className="mt-2 text-xs leading-5 text-rose-800">
-                      {detail.recovery.reason}
-                    </p>
-
-                    {detail.recovery.last_error ? (
-                      <p className="mt-2 break-words rounded-xl bg-white/70 px-3 py-2 font-mono text-[11px] leading-5 text-rose-900">
-                        {detail.recovery.last_error}
-                      </p>
-                    ) : null}
-
-                    <p className="mt-2 text-xs leading-5 text-rose-700">
-                      请先检查 readyz、SealOperation、报告/ZIP 摘要和 ledger；本页不会把完整性故障当成普通网络失败重试。
-                    </p>
-                  </div>
-                ) : null}
-
-                {detail.evidence.id !== "pending" ? (
-                  <EvidencePreview
-                    key={detail.evidence.id}
-                    evidenceId={detail.evidence.id}
-                    originalName={detail.evidence.original_name}
-                    sha256={detail.evidence.sha256}
-                    registeredSizeBytes={detail.evidence.size_bytes}
-                    autoLoad
-                  />
-                ) : null}
-
-                {detail.job.result ? (
-                  <details className="rounded-[22px] bg-[#0d3f86]/70 text-cyan-50">
-                    <summary className="cursor-pointer px-4 py-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
-                      查看完整结构化输出
-                    </summary>
-
-                    <pre className="max-h-80 overflow-auto border-t border-white/10 p-4 text-[11px] leading-5">
-                      {JSON.stringify(detail.job.result, null, 2)}
-                    </pre>
-                  </details>
-                ) : null}
-
-                {detail.job.status === "needs_review" ? (
-                  <div className="rounded-[22px] border border-amber-200 bg-amber-50 p-4">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
-                      <InfoIcon className="h-4 w-4" /> 人工复核是封装前的强制门
-                    </div>
-
-                    <p className="mt-2 text-xs leading-5 text-amber-700">
-                      {persistedTaskTruth?.description}
-                    </p>
-
-                    {detail.remediation_attempt ? (
-                      <label className="mt-4 block text-xs font-semibold text-amber-900">
-                        整改复验结论
-
-                        <select
-                          value={remediationResolution}
-                          onChange={(event) =>
-                            setRemediationResolution(
-                              event.target.value as "" | "resolved" | "not_resolved"
-                            )
-                          }
-                          className="mt-2 w-full rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-amber-400"
-                        >
-                          <option value="" disabled>
-                            请选择复验结论
-                          </option>
-                          <option value="resolved">
-                            复验证据支持“已解决”
-                          </option>
-                          <option value="not_resolved">
-                            复验证据不支持关闭，继续整改
-                          </option>
-                        </select>
-
-                        <span className="mt-2 block font-normal leading-5 text-amber-700">
-                          关闭动作会绑定本次新报告和新证据包，不修改原始案件报告。
-                        </span>
-                      </label>
-                    ) : null}
-
-                    <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                      <button
-                        disabled={
-                          busy !== null ||
-                          !reviewerToken.trim() ||
-                          Boolean(detail.remediation_attempt && !remediationResolution)
-                        }
-                        onClick={() => review("approve")}
-                        className="w-full rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 sm:flex-1"
-                      >
-                        {detail.remediation_attempt
-                          ? remediationResolution === "resolved"
-                            ? "批准、生成证据包并关闭案件"
-                            : remediationResolution === "not_resolved"
-                              ? "批准证据并继续整改"
-                              : "请先选择复验结论"
-                          : "批准记录并生成证据包"}
-                      </button>
-
-                      <button
-                        disabled={busy !== null || !reviewerToken.trim()}
-                        onClick={() => review("reject")}
-                        className="w-full rounded-2xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:text-slate-400 sm:w-auto"
-                      >
-                        驳回
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            )}
-          </section>
-
-        </div>
-        <div className="contents xl:flex xl:flex-col xl:gap-5">
-
-          {/* 02 / 原始输入 */}
-          <section className="order-2 rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm xl:order-none">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
-                  02 / 原始输入
-                </p>
-
-                <h3 className="mt-2 text-lg font-semibold text-slate-900">
-                  选择视频或现场图片
-                </h3>
-              </div>
-
-              <CameraIcon className="h-6 w-6 text-sky-600" />
-            </div>
-
-            <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-[24px] border border-dashed border-sky-300 bg-sky-50 px-5 py-8 text-center hover:bg-sky-100">
-              <CameraIcon className="h-8 w-8 text-sky-500" />
-
-              <span className="mt-3 text-sm font-semibold text-slate-800">
-                {file ? file.name : "点击选择本地证据文件"}
-              </span>
-
-              <span className="mt-1 text-xs text-slate-500">
-                MP4 / MOV / AVI / MKV / WebM / JPG / PNG
-              </span>
-
-              <input
-                className="sr-only"
-                type="file"
-                accept="video/*,image/jpeg,image/png"
-                onChange={(event) =>
-                  setFile(event.target.files?.[0] || null)
-                }
-              />
-            </label>
-
-            {file ? (
-              <p className="mt-3 text-xs text-slate-500">
-                {(file.size / 1024 / 1024).toFixed(2)} MB · 哈希由服务端重新计算
-              </p>
-            ) : null}
-
-            <div className="mt-5">
-              <label
-                className="text-xs font-semibold text-slate-600"
-                htmlFor="analyzer"
-              >
-                处理适配器
-              </label>
-
-              <select
-                id="analyzer"
-                value={analyzer}
-                onChange={(event) =>
-                  setAnalyzer(event.target.value as AnalyzerName)
-                }
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-sky-400"
-              >
-                <option value="stub">
-                  安全占位器：不输出物理测量
-                </option>
-
-                <option
-                  value="demo_fixture"
-                  disabled={!meta?.adapters.demo_fixture?.enabled}
-                >
-                  演示夹具：仅测试流程，非真实推理
-                </option>
-
-                <option
-                  value="remote_http"
-                  disabled={!meta?.adapters.remote_http?.enabled}
-                >
-                  远程单样本推理（未评测）
-                </option>
-              </select>
-
-              <p className="mt-2 text-xs leading-5 text-amber-700">
-                {analyzer === "stub"
-                  ? "当前不会生成虚假准确率或测量值。"
-                  : analyzer === "demo_fixture"
-                    ? "演示夹具会在报告和证据包中标记 evidence_grade=false。"
-                    : "媒体只发送到部署时固定的算法端点；单样本结果仍为 evidence_grade=false、accuracy_claim=null。"}
-              </p>
-            </div>
-
-            <label
-              className="mt-4 block text-xs font-semibold text-slate-600"
-              htmlFor="remediation-attempt-id"
-            >
-              {isRemediationMode
-                ? "整改复验 Attempt ID（已由案件页锁定）"
-                : "整改复验 Attempt ID"}
-
-              <input
-                id="remediation-attempt-id"
-                value={remediationAttemptId}
-                readOnly
-                placeholder="普通任务留空；整改复验请从案件页进入"
-                className="mt-2 w-full cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-mono text-xs text-slate-800 outline-none"
-              />
-            </label>
-
-            <p className="mt-2 text-xs leading-5 text-violet-700">
-              {isRemediationMode
-                ? "上传前已校验 Attempt 归属，并锁定原案件项目与设计基线。"
-                : "普通任务保持为空；整改复验必须从告警与整改页的具体 Attempt 进入。"}
-            </p>
-
-            <button
-              disabled={
-                !baseline ||
-                !file ||
-                busy !== null ||
-                !operatorToken.trim() ||
-                remediationContextLoading ||
-                (isRemediationMode &&
-                  (!remediationCaseDetail ||
-                    !remediationAttempt ||
-                    Boolean(remediationAttempt.verification_job_id)))
-              }
-              onClick={submit}
-              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              <AnalyticsIcon className="h-4 w-4" />
-
-              {busy === "upload"
-                ? "上传并创建任务..."
-                : "提交真实后端任务"}
-            </button>
-          </section>
-
-
-          {/* 04 / 可信交付 */}
-          {proof && report && (
-            <section className="order-4 rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm xl:order-none">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
-                    04 / 可信交付
-                  </p>
-
-                  <h3 className="mt-2 text-lg font-semibold text-slate-900">
-                    报告、证据包与严格核验
-                  </h3>
-                </div>
-
-                <BlockchainIcon className="h-6 w-6 text-sky-600" />
-              </div>
-
-              {persistedReportTruth ? (
-                <div className="mt-4">
-                  <TruthBadge truth={persistedReportTruth} />
-                  <p className="mt-2 text-xs leading-5 text-slate-500">
-                    {persistedReportTruth.description}
-                  </p>
-                </div>
-              ) : null}
-
-              {persistedReportBoundary.length ? (
-                <div
-                  className="mt-4 rounded-[20px] border border-amber-200 bg-amber-50 p-4"
-                  aria-label="报告内持久化真实性边界"
-                >
-                  <p className="text-xs font-semibold text-amber-900">
-                    报告内持久化真实性边界
-                  </p>
-
-                  <ul className="mt-2 space-y-1.5 text-xs leading-5 text-amber-800">
-                    {persistedReportBoundary.map((item, index) => (
-                      <li key={`${index}-${item}`}>· {item}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs text-slate-400">档案编号</p>
-                  <p className="mt-2 break-all text-sm font-semibold text-slate-800">
-                    {proof.archive_id}
-                  </p>
-                </div>
-
-                <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs text-slate-400">证据等级 / 用途</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-800">
-                    {proof.evidence_grade ? "正式证据" : "非正式证据"} · {proof.purpose}
-                  </p>
-                </div>
-
-                <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
-                  <p className="text-xs text-slate-400">证据包 SHA-256</p>
-                  <p className="mt-2 break-all font-mono text-[11px] text-slate-700">
-                    {proof.archive_sha256}
-                  </p>
-                </div>
-
-                <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
-                  <p className="text-xs text-slate-400">Merkle 根哈希</p>
-                  <p className="mt-2 break-all font-mono text-[11px] text-slate-700">
-                    {proof.merkle_root}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <button
-                  onClick={() =>
-                    void api
-                      .downloadReport(report.id, "json")
-                      .catch((reason) =>
-                        setError(
-                          reason instanceof Error
-                            ? reason.message
-                            : "报告下载失败"
-                        )
-                      )
-                  }
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 hover:border-sky-300 hover:text-sky-700"
-                >
-                  <DownloadIcon className="h-4 w-4" />
-                  JSON 报告
-                </button>
-
-                <button
-                  onClick={() =>
-                    void api
-                      .downloadArchive(proof.id)
-                      .catch((reason) =>
-                        setError(
-                          reason instanceof Error
-                            ? reason.message
-                            : "证据包下载失败"
-                        )
-                      )
-                  }
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 hover:border-sky-300 hover:text-sky-700"
-                >
-                  <DownloadIcon className="h-4 w-4" />
-                  证据包
-                </button>
-
-                <button
-                  disabled={busy !== null}
-                  onClick={verify}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-600 px-3 py-3 text-sm font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                >
-                  <ShieldIcon className="h-4 w-4" />
-                  重新校验
-                </button>
-              </div>
-
-              {integrity ? (
-                <div
-                  className={cn(
-                    "mt-4 rounded-[22px] border p-4",
-                    integrity.valid
-                      ? "border-emerald-200 bg-emerald-50"
-                      : "border-rose-200 bg-rose-50"
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "flex items-center gap-2 text-sm font-semibold",
-                      integrity.valid
-                        ? "text-emerald-700"
-                        : "text-rose-700"
-                    )}
-                  >
-                    {integrity.valid ? (
-                      <CheckIcon className="h-4 w-4" />
-                    ) : (
-                      <XIcon className="h-4 w-4" />
-                    )}
-
-                    {integrity.valid
-                      ? "逐项摘要一致，当前证据包未检测到篡改"
-                      : "校验失败，证据包已被修改或链路不完整"}
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {Object.entries(integrity.checks).map(([key, valid]) => (
-                      <div
-                        key={key}
-                        className="rounded-xl bg-white px-3 py-2 text-[11px] text-slate-600"
-                      >
-                        {valid ? "✓" : "×"} {key}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </section>
-          )}
-        </div>
-
+    if (!active.current) return;
+    setProjectId(project.id);
+    setBaselineId(baseline.id);
+    setRevision((value) => value + 1);
+    if (availableAnalyzers.includes("demo_fixture")) setAnalyzer("demo_fixture");
+  });
+
+  return <Modal open onClose={() => { if (!busyRef.current) onClose(); }} size="md" placement="right"
+    title={locked ? "提交复验资料" : "提交核验资料"}>
+    <form className="fm-wf-form" onSubmit={submit} aria-busy={Boolean(busy)}>
+      {locked ? <WorkbenchMeta entries={[["所属项目", projectDisplayName(locked.project.name)], ["设计基线", `${locked.baseline.site_id} · ${locked.baseline.version}`],
+        ["整改记录", `第 ${locked.attempt.attempt_no} 次`]]} /> : <>
+        <label className="fm-wf-field">所属项目
+          <select required className="fm-input" value={projectId} disabled={Boolean(busy)}
+            onChange={(event) => { setProjectId(event.target.value); setBaselineId(""); }}>
+            <option value="">选择项目</option>
+            {allProjects.map((project) => <option key={project.id} value={project.id}>{projectDisplayName(project.name)}</option>)}
+          </select>
+        </label>
+        <label className="fm-wf-field">设计基线
+          <select required className="fm-input" value={baselineId} disabled={!projectId || baselineLoading || Boolean(busy)}
+            onChange={(event) => setBaselineId(event.target.value)}>
+            <option value="">{baselineLoading ? "正在读取基线" : projectId && !baselines.length ? "暂无可选基线" : "选择工点与版本"}</option>
+            {baselines.map((item) => <option key={item.id} value={item.id}>{item.site_id} · {item.version}</option>)}
+          </select>
+        </label>
+        {baselineError ? <p className="fm-wf-message" data-tone="amber" role="status">{baselineError} <button type="button" className="fm-wf-link"
+          onClick={() => setRevision((value) => value + 1)}>重试</button></p> : null}
+      </>}
+      <label className="fm-wf-upload">
+        <FileUp size={24} strokeWidth={1.5} />
+        <span><strong>{file ? file.name : "选择现场照片或视频"}</strong><small>{file
+          ? `${(file.size / 1024 / 1024).toFixed(2)} MB · 点击更换文件` : "照片或视频原件"}</small></span>
+        <input required type="file" accept="image/jpeg,image/png,video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm,.mov,.avi,.mkv"
+          disabled={Boolean(busy)} onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+      </label>
+      <label className="fm-wf-field">处理方式
+        <select required className="fm-input" value={selectedAnalyzer ?? ""} disabled={Boolean(busy)}
+          onChange={(event) => setAnalyzer(event.target.value as AnalyzerName)}>
+          {availableAnalyzers.length ? null : <option value="">暂无可用处理方式</option>}
+          {availableAnalyzers.map((item) => <option key={item} value={item}>{item === "remote_http" && remote?.synthetic ? "远程辅助处理" : analyzerLabel[item]}</option>)}
+        </select>
+      </label>
+      {allowTrial && !locked ? <details className="fm-wf-form-disclosure">
+        <summary>独立设计基线</summary>
+        <button type="button" className="fm-button" disabled={Boolean(busy)} onClick={createTrialBaseline}>{busy === "trial" ? "正在准备…" : "准备独立设计基线"}</button>
+      </details> : null}
+      {error ? <p className="fm-wf-message" data-tone="red" role="alert">{error}</p> : null}
+      {busy === "upload" && <OperationStatus detail="资料登记后会进入核验队列。">正在上传影像</OperationStatus>}
+      <div className="fm-wf-actions fm-wf-form-actions">
+        <button type="button" className="fm-button" disabled={Boolean(busy)} onClick={onClose}>取消</button>
+        <button type="submit" className="fm-button fm-button-primary" disabled={Boolean(busy || !file || !selectedBaseline || !selectedAnalyzer)}>
+          {busy === "upload" ? "正在提交…" : locked ? "提交复验任务" : "提交核验任务"}
+        </button>
       </div>
+    </form>
+  </Modal>;
+}
+
+function VerificationSettings({ meta, includeTrial, onTrialChange, onAccessChange, onClose }: {
+  meta: CapabilityMeta | null; includeTrial: boolean; onTrialChange: (value: boolean) => void;
+  onAccessChange: () => void; onClose: () => void;
+}) {
+  const [operator, setOperator] = useState("");
+  const [reviewer, setReviewer] = useState("");
+  const [health, setHealth] = useState<"loading" | "ready" | "offline">("loading");
+  const [snapshot, setSnapshot] = useState<VerificationOperationsSnapshot | null>(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setHealth("loading");
+    setError("");
+    void Promise.allSettled([api.health(), api.verificationDispatchOperations()]).then(([ready, operations]) => {
+      if (!active) return;
+      setHealth(ready.status === "fulfilled" && ready.value.status === "ready" ? "ready" : "offline");
+      setSnapshot(operations.status === "fulfilled" ? operations.value : null);
+      if (operations.status === "rejected") setError(apiMessage(operations.reason, "运行状态读取失败"));
+    });
+    return () => { active = false; };
+  }, [revision]);
+
+  const configure = (reset: boolean) => {
+    const next = reset ? {
+      operator: import.meta.env.VITE_OPERATOR_API_KEY || "", reviewer: import.meta.env.VITE_REVIEWER_API_KEY || "",
+    } : {
+      operator: operator.trim() || sessionAccess.operator, reviewer: reviewer.trim() || sessionAccess.reviewer,
+    };
+    sessionAccess = next;
+    api.configureTokens(next);
+    setOperator("");
+    setReviewer("");
+    setNotice(reset ? "已恢复默认访问设置。" : "本次会话访问设置已更新。");
+    setRevision((value) => value + 1);
+    onAccessChange();
+  };
+
+  return <Modal open onClose={onClose} title="核验运行设置" size="md" placement="right">
+    <div className="fm-wf-form">
+      <div className="fm-wf-section-head"><h3>服务状态</h3>
+        <WorkbenchStatus tone={health === "ready" ? "green" : health === "offline" ? "red" : "neutral"}>
+          {health === "ready" ? "服务就绪" : health === "offline" ? "服务暂不可用" : "读取中"}
+        </WorkbenchStatus>
+      </div>
+      <WorkbenchMeta entries={[
+        ["运行模式", meta?.verification_execution.mode === "external" ? "独立执行节点" : meta ? "服务内执行" : "—"],
+        ["数据结构", meta ? (meta.database_schema.at_head && meta.database_schema.drift_free ? "已同步" : "待检查") : "—"],
+        ["待调度任务", snapshot?.dispatch.unclaimed_queued_jobs],
+        ["正在执行", snapshot?.dispatch.active_leases],
+        ["待处置失败", snapshot?.dispatch.dead_letter_jobs],
+      ]} />
+      {snapshot ? <details className="fm-wf-form-disclosure">
+        <summary>调度与数据状态</summary>
+        <WorkbenchMeta entries={[
+          ["读取时间", localTime(snapshot.generated_at)],
+          ["调度状态", snapshot.status === "healthy" ? "正常" : snapshot.status === "attention" ? "待关注" : "异常"],
+          ["最长排队", snapshot.dispatch.oldest_queued_seconds === null ? "—" : `${Math.round(snapshot.dispatch.oldest_queued_seconds)} 秒`],
+          ["执行次数", snapshot.attempts.total],
+          ["执行中记录", snapshot.attempts.open],
+          ["完整性问题", snapshot.integrity.issue_count],
+        ]} />
+      </details> : null}
+      {snapshot?.alerts.map((alert) => <p key={alert.code} className="fm-wf-message" data-tone={alert.severity === "incident" ? "red" : "amber"}>
+        {alertLabels[alert.code]} · {alert.count}
+      </p>)}
+      {error ? <p className="fm-wf-message" data-tone="amber" role="status">{error}</p> : null}
+      <button className="fm-button" type="button" disabled={health === "loading"} onClick={() => setRevision((value) => value + 1)}><RefreshCw size={14} />刷新状态</button>
+      <details className="fm-wf-form-disclosure">
+        <summary>高级设置</summary>
+        <label className="fm-wf-check"><input type="checkbox" checked={includeTrial} onChange={(event) => onTrialChange(event.target.checked)} />显示扩展任务和入口</label>
+        <form className="fm-wf-form" onSubmit={(event) => { event.preventDefault(); configure(false); }}>
+          <label className="fm-wf-field">操作员访问密钥<input type="password" autoComplete="off" className="fm-input" value={operator}
+            onChange={(event) => setOperator(event.target.value)} placeholder="留空时沿用当前设置" /></label>
+          <label className="fm-wf-field">复核员访问密钥<input type="password" autoComplete="off" className="fm-input" value={reviewer}
+            onChange={(event) => setReviewer(event.target.value)} placeholder="留空时沿用当前设置" /></label>
+          <div className="fm-wf-actions">
+            <button className="fm-button" type="button" onClick={() => configure(true)}>恢复默认</button>
+            <button className="fm-button fm-button-primary" type="submit" disabled={!operator.trim() && !reviewer.trim()}>应用访问设置</button>
+          </div>
+          {notice ? <p className="fm-wf-muted" role="status">{notice}</p> : null}
+        </form>
+      </details>
     </div>
-  );
+  </Modal>;
+}
+
+let sessionAccess = {
+  operator: import.meta.env.VITE_OPERATOR_API_KEY || "",
+  reviewer: import.meta.env.VITE_REVIEWER_API_KEY || "",
 };

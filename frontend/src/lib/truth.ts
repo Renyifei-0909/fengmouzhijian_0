@@ -1,4 +1,4 @@
-import type { Report, VerificationJob } from "./api";
+import type { CapabilityMeta, Project, Report, VerificationJob } from "./api";
 
 export type TruthTone = 'slate' | 'amber' | 'violet' | 'emerald' | 'rose' | 'error';
 
@@ -42,6 +42,16 @@ const resultEvidenceGrade = (result: Record<string, unknown> | null): boolean =>
 const resultHasAccuracyClaim = (result: Record<string, unknown> | null): boolean => (
   isRecord(result) && result.accuracy_claim !== null && result.accuracy_claim !== undefined
 );
+
+export function isTrialProject(project: Project | undefined): boolean {
+  return Boolean(project && /^(核验试用工程|现场参考工程|现场核验工作区|匿名化隐蔽工程联调项目)$/.test(project.name));
+}
+
+export function isTrialJob(job: VerificationJob, meta?: CapabilityMeta | null): boolean {
+  const provenance = job.result?.provenance;
+  return job.analyzer_name === "demo_fixture" || job.result?.analysis_mode === "demo_fixture"
+    || (job.result ? isRecord(provenance) && provenance.synthetic === true : meta?.adapters[job.analyzer_name]?.synthetic === true);
+}
 
 export const analysisTruthFromJob = (job: VerificationJob): TruthDescriptor => {
   const mode = resultMode(job);

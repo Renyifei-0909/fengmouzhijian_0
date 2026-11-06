@@ -1,102 +1,244 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { api, IntegrityCheck, Proof } from "../lib/api";
-import { Notice } from "../components/ui/Notice";
-import { Modal } from "../components/ui/Modal";
-import { BlockchainIcon, SearchIcon, ShieldIcon, CheckIcon, DownloadIcon, ClipboardIcon, XIcon } from "../components/Icons";
-import { cn } from "../utils/cn";
+import { archiveTitle } from "../lib/productCopy";
+import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
+import { Link, useSearchParams } from "react-router";
+import { Archive, ChevronRight, Copy, Download, Search, ShieldCheck } from "lucide-react";
+import { api } from "../lib/api";
+import type { IntegrityCheck, Proof } from "../lib/api";
+import { RecordEmpty, RecordError, RecordMeta, RecordStatus, recordError, recordTime } from "./records-ui";
 
-export const TraceabilityPage: React.FC = () => {
-  const [proofs, setProofs] = useState<Proof[]>([]);
-  const [keyword, setKeyword] = useState("");
-  const [selected, setSelected] = useState<Proof | null>(null);
-  const [integrity, setIntegrity] = useState<IntegrityCheck | null>(null);
-  const [notice, setNotice] = useState("");
-  const [error, setError] = useState("");
+const purposeLabels: Record<string, string> = { validation: "评测归档", demo: "流程归档", workflow: "流程归档", review: "复核归档" };
+const checkLabels: Record<string, string> = {
+  archive_exists: "归档文件",
+  archive_sha256: "归档摘要",
+  manifest_sha256: "文件清单",
+  member_hashes: "档案内文件",
+  merkle_root: "内容指纹",
+  record_hash: "记录指纹",
+  ledger_chain: "台账链条",
+  metadata_consistency: "归档信息",
+};
+
+type Inspection = { proofId: string; result?: IntegrityCheck; error?: string; running: boolean };
+
+function labelPurpose(proof: Proof) {
+  return purposeLabels[proof.purpose] ?? "工程归档";
+}
+
+async function copyFingerprint(value: string) {
+  try {
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(value);
+      return;
+    }
+  } catch {
+    // A secure clipboard can still be unavailable in a preview or managed browser.
+  }
+  const prior = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const field = document.createElement("textarea");
+  field.value = value;
+  field.readOnly = true;
+  field.style.cssText = "position:fixed;inset:0 auto auto 0;opacity:0;pointer-events:none";
+  document.body.append(field);
+  field.select();
+  try {
+    if (!document.execCommand("copy")) throw new Error("复制失败，请展开档案详情手动复制。");
+  } finally {
+    field.remove();
+    prior?.focus({ preventScroll: true });
+  }
+}
+
+export function TraceabilityPage() {
+  const [params, setParams] = useSearchParams();
+  const fingerprint = params.get("fingerprint")?.trim() ?? "";
+  const archive = params.get("archive")?.trim() ?? "";
+  const [keyword, setKeyword] = useState(fingerprint);
+  const [loaded, setLoaded] = useState<{ fingerprint: string; proofs: Proof[] } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [verifying, setVerifying] = useState(false);
+  const [reload, setReload] = useState(0);
+  const [error, setError] = useState("");
+  const [inspection, setInspection] = useState<Inspection | null>(null);
+  const requestRef = useRef(0);
+  const [action, setAction] = useState<{ proofId: string; notice?: string; error?: string } | null>(null);
+  const [downloadId, setDownloadId] = useState("");
 
-  const loadAll = async () => {
+  useEffect(() => setKeyword(fingerprint), [fingerprint]);
+
+  useEffect(() => {
+    let active = true;
     setLoading(true);
     setError("");
-    setNotice("");
+    void api.listProofs(fingerprint || undefined).then((items) => {
+      if (active) setLoaded({ fingerprint, proofs: [...items].sort((a, b) => b.ledger_index - a.ledger_index) });
+    }).catch((reason) => {
+      if (active) setError(recordError(reason, "档案列表读取失败。"));
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [fingerprint, reload]);
+
+  useEffect(() => () => { requestRef.current += 1; }, []);
+
+  const proofs = loaded?.fingerprint === fingerprint ? loaded.proofs : [];
+  const selected = archive ? proofs.find((item) => item.archive_id === archive || item.id === archive) : proofs[0];
+  const current = selected?.id === inspection?.proofId ? inspection : null;
+  const feedback = selected?.id === action?.proofId ? action : null;
+  const integrity = current?.result;
+  const checks = integrity ? Object.entries(integrity.checks) : Object.keys(checkLabels).map((key) => [key, null] as const);
+
+  function search(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    const next = event ? keyword.trim() : "";
+    if (!event) setKeyword("");
+    setInspection(null);
+    setAction(null);
+    requestRef.current += 1;
+    if (next === fingerprint) setReload((value) => value + 1);
+    const query = new URLSearchParams();
+    if (next) query.set("fingerprint", next);
+    setParams(query);
+  }
+
+  function selectArchive(item: Proof) {
+    if (item.id === selected?.id) return;
+    setInspection(null);
+    setAction(null);
+    requestRef.current += 1;
+    setParams((currentParams) => {
+      const next = new URLSearchParams(currentParams);
+      next.set("archive", item.archive_id);
+      return next;
+    }, { replace: true });
+  }
+
+  async function verify() {
+    if (!selected || current?.running) return;
+    const proofId = selected.id;
+    const request = ++requestRef.current;
+    setInspection({ proofId, running: true });
     try {
-      const items = await api.listProofs();
-      setProofs(items);
-      if (!selected && items.length) setSelected(items[0]);
+      const result = await api.verifyProof(proofId);
+      if (requestRef.current === request) setInspection({ proofId, result, running: false });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "档案列表加载失败");
-    } finally { setLoading(false); }
-  };
+      if (requestRef.current === request) setInspection({ proofId, error: recordError(reason, "完整性核验失败。"), running: false });
+    }
+  }
 
-  useEffect(() => { void loadAll(); }, []);
+  async function download() {
+    if (!selected || downloadId) return;
+    setAction(null);
+    setDownloadId(selected.id);
+    try { await api.downloadArchive(selected.id); }
+    catch (reason) { setAction({ proofId: selected.id, error: recordError(reason, "证据包下载失败。") }); }
+    finally { setDownloadId(""); }
+  }
 
-  const search = async () => {
-    setError(""); setNotice(""); setIntegrity(null);
-    const value = keyword.trim();
-    if (!value) { await loadAll(); return; }
-    try {
-      const matches = await api.listProofs(value);
-      setProofs(matches);
-      setSelected(matches[0] || null);
-      if (!matches.length) setNotice("未命中任何真实档案；系统没有回退到静态通过结果。");
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "检索失败"); }
-  };
-
-  const verify = async () => {
+  async function copy() {
     if (!selected) return;
-    setVerifying(true); setError("");
-    try { setIntegrity(await api.verifyProof(selected.id)); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "完整性核验失败"); }
-    finally { setVerifying(false); }
-  };
+    setAction(null);
+    try {
+      await copyFingerprint(selected.archive_sha256);
+      setAction({ proofId: selected.id, notice: "已复制证据包摘要。" });
+    } catch {
+      setAction({ proofId: selected.id, error: "无法自动复制，请展开档案详情手动复制。" });
+    }
+  }
 
-  const ledger = useMemo(() => [...proofs].sort((a, b) => b.ledger_index - a.ledger_index), [proofs]);
-
-  return <div className="space-y-5 page-enter">
-    <section className="relative overflow-hidden rounded-[30px] border border-cyan-300/20 brand-hero p-6 text-white shadow-[0_24px_90px_-45px_rgba(8,145,178,.85)]">
-      <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-cyan-400/15 blur-3xl" />
-      <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100"><BlockchainIcon className="h-4 w-4" /> 本地可信交付账本</div><h2 className="mt-4 text-2xl font-semibold">档案指纹检索与逐项重算</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">支持档案编号、证据包摘要、清单摘要或记录哈希精确查询；核验动作会重新读取归档文件并校验摘要、Merkle 根哈希与前序链关系。</p></div><div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-4"><p className="text-[11px] tracking-[.08em] text-cyan-200/80">本地台账</p><p className="mt-1 text-2xl font-semibold">{proofs.length} 条档案</p></div></div>
-    </section>
-
-    {notice ? <Notice type="info" message={notice} /> : null}
-    {error ? <Notice type="info" message={error} /> : null}
-
-    <section className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm">
-      <div className="flex flex-col gap-3 md:flex-row"><div className="flex flex-1 items-center gap-3 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3 focus-within:border-sky-300"><SearchIcon className="h-4 w-4 text-slate-400" /><input aria-label="档案指纹" value={keyword} onChange={(event) => setKeyword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void search(); }} className="w-full bg-transparent text-sm outline-none" placeholder="输入 ARC-… 或完整的 64 位 SHA-256" /></div><button onClick={() => void search()} className="rounded-2xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white hover:bg-sky-700">查询真实档案</button><button onClick={() => { setKeyword(""); setIntegrity(null); void loadAll(); }} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-600">重置</button></div>
-    </section>
-
-    <div className="grid gap-5 xl:grid-cols-[.82fr_1.18fr]">
-      <section className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm"><div className="flex items-center justify-between"><div><h3 className="font-semibold text-slate-900">真实档案账本</h3><p className="mt-1 text-xs text-slate-500">按台账序号倒序</p></div><ShieldIcon className="h-5 w-5 text-sky-600" /></div><div className="mt-4 max-h-[620px] space-y-3 overflow-auto pr-1">{loading ? <p className="py-10 text-center text-sm text-slate-500">读取中…</p> : null}{!loading && ledger.length === 0 ? <p className="rounded-[22px] border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">暂无匹配档案</p> : null}{ledger.map((item) => <button key={item.id} aria-pressed={selected?.id === item.id} onClick={() => { setSelected(item); setIntegrity(null); }} className={cn("w-full rounded-[22px] border p-4 text-left transition-all", selected?.id === item.id ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-slate-50 hover:border-sky-200")}><div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-slate-900">{item.archive_id}</p><span className="rounded-full bg-white px-2 py-1 text-[10px] text-slate-500">#{item.ledger_index}</span></div><p className="mt-2 truncate font-mono text-[10px] text-slate-500">{item.record_hash}</p><p className="mt-2 text-xs text-slate-500">{new Date(item.created_at).toLocaleString("zh-CN")}</p></button>)}</div></section>
-
-      <section className="space-y-5">
-        <div className="rounded-[28px] border border-slate-200 panel-card p-5 shadow-sm"><div className="flex items-center justify-between"><div><h3 className="font-semibold text-slate-900">档案指纹</h3><p className="mt-1 text-xs text-slate-500">选择左侧档案后执行独立核验</p></div>{integrity ? <span className={cn("inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold", integrity.valid ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>{integrity.valid ? <CheckIcon className="h-4 w-4" /> : <XIcon className="h-4 w-4" />}{integrity.valid ? "完整性通过" : "核验失败"}</span> : null}</div>
-          {selected ? <div className="mt-5 grid gap-3 md:grid-cols-2"><Fingerprint label="档案编号" value={selected.archive_id} /><Fingerprint label="证据用途" value={`${selected.purpose} · ${selected.evidence_grade ? "正式" : "非正式"}`} /><div className="md:col-span-2"><Fingerprint label="证据包 SHA-256" value={selected.archive_sha256} mono /></div><div className="md:col-span-2"><Fingerprint label="Merkle Root" value={selected.merkle_root} mono /></div><div className="md:col-span-2"><Fingerprint label="账本记录哈希" value={selected.record_hash} mono /></div><div className="md:col-span-2"><Fingerprint label="前序记录哈希" value={selected.previous_record_hash} mono /></div></div> : <p className="mt-5 rounded-[22px] border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">请选择档案</p>}
-          <div className="mt-4 grid gap-3 sm:grid-cols-3"><button disabled={!selected || verifying} onClick={() => void verify()} className="rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300">{verifying ? "正在重算…" : "执行完整性核验"}</button><button disabled={!selected} onClick={() => selected && void navigator.clipboard.writeText(selected.archive_sha256).then(() => setNotice("完整 SHA-256 已复制。"))} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 disabled:text-slate-300"><ClipboardIcon className="h-4 w-4" /> 复制摘要</button><button disabled={!selected} onClick={() => selected && void api.downloadArchive(selected.id).catch((reason) => setError(reason.message))} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 disabled:text-slate-300"><DownloadIcon className="h-4 w-4" /> 下载证据包</button></div>
+  return <div className="fm-records fm-trace-page page-enter">
+    <section className="fm-panel" aria-label="档案检索">
+      <form className="fm-record-toolbar fm-record-body" onSubmit={search}>
+        <div className="flex items-center gap-3">
+          <Archive size={23} className="shrink-0 text-sky-300" aria-hidden="true" />
+          <div><h2>档案检索</h2><p className="fm-record-muted mt-1">按档案编号或完整摘要精确查找</p></div>
         </div>
+        <div className="fm-record-actions">
+          <label className="fm-record-search">
+            <Search size={15} aria-hidden="true" />
+            <input className="fm-input" aria-label="档案编号或摘要" placeholder="输入档案编号或摘要" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
+          </label>
+          <button className="fm-button fm-button-primary" type="submit" disabled={loading}>检索</button>
+          <button className="fm-button" type="button" onClick={() => search()}>重置</button>
+        </div>
+      </form>
+    </section>
 
-        {integrity ? (
-          <div className={cn("rounded-[28px] border p-5", integrity.valid ? "border-success-light bg-success-light" : "border-danger-light bg-danger-light")}>
-            <h3 className={cn("font-semibold", integrity.valid ? "text-success" : "text-danger")}>逐项核验结果</h3>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {Object.entries(integrity.checks).map(([key, valid]) => (
-                <div key={key} className={cn("rounded-2xl bg-white px-3 py-2 text-xs", valid ? "text-slate-700" : "text-danger font-semibold")}>
-                  {valid ? "✓" : "✗"} {key}
-                </div>
-              ))}
-            </div>
-            {!integrity.valid && integrity.errors.length > 0 && (
-              <div className="mt-3 rounded-xl border border-danger-light bg-white p-3">
-                <p className="text-xs font-semibold text-danger">失败详情：</p>
-                <ul className="mt-2 list-disc pl-5 text-xs text-danger">
-                  {integrity.errors.map((err, i) => <li key={i}>{err}</li>)}
-                </ul>
-              </div>
-            )}
+    {error ? <RecordError message={error} /> : null}
+    <div className="fm-record-split">
+      <section className="fm-panel" aria-label="档案台账" aria-busy={loading}>
+        <div className="fm-record-section-head">
+          <h2>档案台账 <span className="fm-record-muted">· {proofs.length}</span></h2>
+          <span className="fm-record-muted">最新在前</span>
+        </div>
+        {proofs.length ? <ul className="fm-record-list">
+          {proofs.map((item) => <li key={item.id}><button type="button" className="fm-record-row" aria-pressed={selected?.id === item.id} onClick={() => selectArchive(item)}>
+            <Archive size={19} strokeWidth={1.55} aria-hidden="true" />
+            <span>
+              <span className="fm-record-name">{archiveTitle(item.ledger_index)}</span>
+              <small>{labelPurpose(item)} · {recordTime(item.created_at, true)}</small>
+            </span>
+            <ChevronRight size={14} aria-hidden="true" />
+          </button></li>)}
+        </ul> : <RecordEmpty loading={loading}>{loading ? "正在读取档案…" : error ? "档案清单暂不可用" : fingerprint ? "未找到匹配档案" : "暂无归档记录"}</RecordEmpty>}
+      </section>
+
+      <section className="fm-panel" aria-label="完整性核验">
+        <div className="fm-record-section-head">
+          <h2>完整性核验</h2>
+          {integrity ? <RecordStatus tone={integrity.valid ? "green" : "red"}>{integrity.valid ? "核验通过" : "核验未通过"}</RecordStatus>
+            : selected ? <RecordStatus tone={current?.running ? "blue" : "neutral"}>{current?.running ? "核验中" : "待核验"}</RecordStatus> : null}
+        </div>
+        {selected ? <div className="fm-record-body" key={selected.id}>
+          <div>
+            <p className="fm-record-name text-base">{archiveTitle(selected.ledger_index)}</p>
           </div>
-        ) : null}
+          <RecordMeta entries={[
+            ["归档用途", labelPurpose(selected)],
+            ["归档时间", recordTime(selected.created_at)],
+            ["证据等级", selected.evidence_grade ? "评测证据" : "工程过程资料"],
+            ["交付报告", <Link className="fm-link" to={`/reports?report=${encodeURIComponent(selected.report_id)}`}>查看报告</Link>],
+          ]} />
+          <div className="fm-record-actions">
+            <button type="button" className="fm-button fm-button-primary" disabled={current?.running} onClick={() => void verify()}>
+              <ShieldCheck size={16} aria-hidden="true" />{current?.running ? "正在核验…" : integrity ? "重新核验" : "核验档案"}
+            </button>
+            <button type="button" className="fm-button" disabled={!!downloadId} onClick={() => void download()}>
+              <Download size={15} aria-hidden="true" />{downloadId === selected.id ? "下载中…" : "下载证据包"}
+            </button>
+            <button type="button" className="fm-button" onClick={() => void copy()}><Copy size={14} aria-hidden="true" />复制摘要</button>
+          </div>
+          {feedback?.notice ? <p className="text-xs text-emerald-300" role="status">{feedback.notice}</p> : null}
+          {feedback?.error ? <RecordError message={feedback.error} /> : null}
+          {current?.error ? <RecordError message={current.error} /> : null}
+          <div className="border-t border-slate-200 pt-3" aria-busy={current?.running}>
+            <h3 className="font-semibold">逐项核验</h3>
+            <ul className="fm-trace-checks">
+              {checks.map(([key, passed]) => {
+                const skipped = key !== "archive_exists" && integrity?.checks.archive_exists === false;
+                return <li key={key}><span>{checkLabels[key] ?? "其他核验项"}</span>
+                  <RecordStatus tone={passed === null || skipped ? "neutral" : passed ? "green" : "red"}>
+                    {passed === null ? "待检查" : skipped ? "未检查" : passed ? "通过" : "未通过"}
+                  </RecordStatus></li>;
+              })}
+            </ul>
+            {integrity?.errors.length ? <details className="mt-3 text-xs text-slate-400"><summary className="cursor-pointer">失败详情</summary>
+              <ul className="mt-2 list-disc space-y-1 break-words pl-4">{integrity.errors.map((message, index) => <li key={index}>{message}</li>)}</ul>
+            </details> : null}
+          </div>
+          <details className="fm-record-details">
+            <summary>档案详情</summary>
+            <RecordMeta entries={[
+              ["完整档案编号", <code>{selected.archive_id}</code>],
+              ["证据包摘要", <code>{selected.archive_sha256}</code>],
+              ["清单摘要", <code>{selected.manifest_sha256}</code>],
+              ["内容指纹", <code>{selected.merkle_root}</code>],
+              ["记录指纹", <code>{selected.record_hash}</code>],
+              ["前序指纹", <code>{selected.previous_record_hash}</code>],
+            ]} />
+          </details>
+        </div> : <RecordEmpty loading={loading}>{loading ? "正在读取档案…" : archive ? "未找到指定档案，请重新选择。" : "选择档案后核验完整性"}</RecordEmpty>}
       </section>
     </div>
   </div>;
-};
-
-const Fingerprint: React.FC<{ label: string; value: string; mono?: boolean }> = ({ label, value, mono }) => <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4"><p className="text-xs text-slate-500">{label}</p><p className={cn("mt-2 break-all text-sm text-slate-900", mono && "font-mono text-[11px] leading-5")}>{value}</p></div>;
+}

@@ -1,13 +1,26 @@
 /**
- * Product-facing copy and status labels for 烽眸智鉴.
+ * Product-facing copy and status labels for 锋眸智鉴.
  * API enums remain English; only display strings are mapped here.
  */
 
 export const PRODUCT = {
-  name: "烽眸智鉴",
-  subtitle: "通信工程施工合规管理平台",
-  defaultPageTitle: "烽眸智鉴",
+  name: "锋眸智鉴",
+  subtitle: "通信工程监管与交付",
+  defaultPageTitle: "锋眸智鉴",
 } as const;
+
+export function archiveTitle(ledgerIndex: number) {
+  return `档案 ${String(ledgerIndex).padStart(4, "0")}`;
+}
+
+export function projectDisplayName(name: string) {
+  if (/^(烽|锋)眸智鉴 · 合成整改闭环演示$/.test(name)) return `${PRODUCT.name} · 整改流程资料`;
+  return name.replace("烽眸智鉴", PRODUCT.name).replace(/[（(](?:本地样例|测试样例)[）)]$/, "").trim();
+}
+
+export function engineeringObjectDisplayName(name: string): string {
+  return name.replace(/^样例管段(?=\s|$)/, "通信管段").replace(/^Sample segment (\d+)$/, "通信管段 $1");
+}
 
 /** Primary commercial navigation (routes still point at existing pages). */
 export const PRIMARY_NAV = [
@@ -21,8 +34,8 @@ export const PRIMARY_NAV = [
 ] as const;
 
 export const PAGE_META: Record<string, { title: string; subtitle: string }> = {
-  "/dashboard": { title: "项目总览", subtitle: "工程进度与核验概况" },
-  "/projects": { title: "项目管理", subtitle: "在建工程与工点管理" },
+  "/dashboard": { title: "项目总览", subtitle: "施工任务与交付记录" },
+  "/projects": { title: "项目管理", subtitle: "项目、设计基线与交付记录" },
   "/gis-map": { title: "工程作业", subtitle: "工程对象、施工工单与现场核验" },
   "/backend-workflow": { title: "核验中心", subtitle: "资料提交、人工复核与交付归档" },
   "/alarms": { title: "整改中心", subtitle: "偏差分诊、整改与复验" },
@@ -33,9 +46,20 @@ export const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   "/analytics": { title: "数据分析", subtitle: "指标分析（内部入口）" },
   "/data-cockpit": { title: "数据看板", subtitle: "运营看板（内部入口）" },
   "/model-service": { title: "模型服务", subtitle: "模型编排（内部入口）" },
-  "/settings/account": { title: "账户设置", subtitle: "账户信息（内部入口）" },
+  "/settings/account": { title: "工作台设置", subtitle: "导航布局与服务状态" },
   "/settings/system": { title: "系统设置", subtitle: "系统配置（内部入口）" },
 };
+
+export const PROJECT_STATUS_LABEL: Record<string, string> = {
+  active: "进行中",
+  pending: "待启动",
+  paused: "已暂停",
+  completed: "已完成",
+};
+
+export function labelProjectStatus(status: string): string {
+  return PROJECT_STATUS_LABEL[status] ?? "待确认";
+}
 
 export const WORK_ORDER_STATUS_LABEL: Record<string, string> = {
   draft: "草稿",
@@ -78,7 +102,7 @@ export const COMPLIANCE_VERDICT_LABEL: Record<string, string> = {
 
 export const LOCATION_SOURCE_LABEL: Record<string, string> = {
   device_gps: "设备定位",
-  synthetic_demo: "样例位置",
+  synthetic_demo: "标注位置",
   manual: "手工录入",
   unknown: "未知来源",
 };
@@ -162,7 +186,7 @@ export const COPY = {
   importDesignData: "导入工程数据",
   importHelp:
     "默认通过标准 GeoPackage 导入：先数据预检，再确认写入。预检通过不等于导入完成；格式校验不等于数据来源已获授权。",
-  sampleDesignData: "样例数据",
+  sampleDesignData: "工程资料",
   refresh: "刷新",
   gpkgImportTitle: "导入工程数据",
   gpkgSelectFile: "选择 GeoPackage 文件",
@@ -179,7 +203,7 @@ export const COPY = {
   gpkgBlocked: "预检未通过，无法确认导入。",
   gpkgConfirming: "正在确认导入…",
   gpkgUploading: "正在上传并预检…",
-  gpkgSourceClassSample: "样例 / 未核验来源",
+  gpkgSourceClassSample: "待核验来源",
   gpkgTruthBoundary:
     "预检通过不等于导入完成；格式校验不等于来源已授权；位置核验不构成绝对防作弊；单张照片不能提供工程级精确测深；当前无正式 85%/90% 指标。",
 
@@ -209,12 +233,12 @@ export const COPY = {
 
   fieldCapture: "现场资料",
   captureMode: "采集方式",
-  useSampleLocation: "使用样例位置",
-  useSampleLocationHelp: "仅用于系统试用，不代表现场定位。",
+  useSampleLocation: "使用标注位置",
+  useSampleLocationHelp: "使用标注坐标时，采集记录会注明位置来源。",
   fieldMedia: "现场照片或视频",
   submitVerification: "提交核验",
   advancedSettings: "高级设置",
-  testConfig: "测试配置",
+  testConfig: "核验配置",
   analyzerHelp: "普通现场流程由系统配置分析方式，无需手动选择。",
 
   spatialCheck: "位置核验",
@@ -229,7 +253,7 @@ export const COPY = {
 
   observations: "识别结果",
   resultSource: "结果来源",
-  testAnalyzer: "测试分析器",
+  testAnalyzer: "核验方式",
   testAnalyzerNote: "当前结果用于验证业务流程，不计入正式算法指标。",
   complianceJudgement: "合规判定",
   judgementConclusion: "规则初判",
@@ -253,7 +277,7 @@ export const COPY = {
   dataSource: "资料来源",
   owner: "负责人",
 
-  sampleDataBadge: "样例数据",
+  sampleDataBadge: "工程资料",
   frozenSnapshots: "设计与规则快照",
   selectObjectFirst: "请先选择工程对象",
   noPackages: "暂无设计数据，请先导入。",

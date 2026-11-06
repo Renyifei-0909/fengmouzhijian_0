@@ -1,26 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import { Link } from "react-router";
-import {
-  api,
-  AnalyzerName,
-  ApiRequestError,
-  ComplianceEvaluation,
-  EvidenceCapture,
-  LocationSource,
-  VerificationDetail,
-  WorkOrder,
+import { ArrowUpRight, Camera, Crosshair, FileUp, History, RefreshCw } from "lucide-react";
+import { api, ApiRequestError } from "../../lib/api";
+import type {
+  AnalyzerName, CapabilityMeta, ComplianceEvaluation, EvidenceCapture, LocationSource, VerificationDetail, WorkOrder,
 } from "../../lib/api";
-import { Notice } from "../ui/Notice";
-import { cn } from "../../utils/cn";
-import { InfoIcon } from "../Icons";
-import {
-  COMPLIANCE_BUSINESS_NOTE,
-  COPY,
-  friendlyApiError,
-  labelLocationSource,
-  labelSpatialStatus,
-  labelWorkOrderStatus,
-} from "../../lib/productCopy";
+import { friendlyApiError, labelLocationSource, labelSpatialStatus } from "../../lib/productCopy";
 import {
   groupDifferenceRows,
   labelHumanReviewStatus,
@@ -30,1049 +16,545 @@ import {
   spatialBusinessSummary,
   structureObservations,
 } from "../../lib/verificationDisplay";
+import { EvidencePreview } from "../ui/EvidencePreview";
+import { Notice } from "../ui/Notice";
+import { FieldScene } from "../ui/FieldScene";
+import { OperationStatus } from "../ui/OperationStatus";
+import type { CaptureMarker } from "./GeoMap";
+import { formatWorkbenchTime } from "./workbenchTime";
+import "./workbench.css";
 
-const spatialTone: Record<string, string> = {
-  passed: "border-emerald-300 bg-emerald-50 text-emerald-950",
-  failed: "border-rose-300 bg-rose-50 text-rose-950",
-  unavailable: "border-amber-300 bg-amber-50 text-amber-950",
-  skipped: "border-slate-300 bg-slate-50 text-slate-800",
-};
-
-const verdictTone: Record<string, string> = {
-  compliant: "border-emerald-300 bg-emerald-50 text-emerald-950",
-  deviation_detected: "border-rose-300 bg-rose-50 text-rose-950",
-  insufficient_evidence: "border-amber-300 bg-amber-50 text-amber-950",
-  needs_review: "border-amber-300 bg-amber-50 text-amber-950",
+const CAPTURE_ALLOWED = new Set(["assigned", "remediating", "evidence_uploaded", "analyzing"]);
+const ACTIVE_JOBS = new Set(["queued", "running", "sealing"]);
+const ANALYZERS: Record<AnalyzerName, string> = {
+  remote_http: "辅助提取",
+  stub: "人工核验",
+  demo_fixture: "规则辅助",
 };
 
 type Props = {
   workOrder: WorkOrder;
-  onWorkOrderUpdated?: (wo: WorkOrder) => void;
-  onCaptureMarkerChange?: (
-    marker: { longitude: number; latitude: number; synthetic: boolean } | null,
-  ) => void;
+  onWorkOrderUpdated?: (workOrder: WorkOrder) => void;
+  onCaptureMarkerChange?: (marker: CaptureMarker | null) => void;
 };
 
-type HistoryMeta = {
-  jobStatus: string | null;
-  verdict: string | null;
-  loading: boolean;
+type CaptureResult = {
+  detail: VerificationDetail;
+  compliance: ComplianceEvaluation | null;
 };
 
-export const WorkOrderCapturePanel: React.FC<Props> = ({
-  workOrder,
-  onWorkOrderUpdated,
-  onCaptureMarkerChange,
-}) => {
+function localTime(milliseconds = Date.now()) {
+  const date = new Date(milliseconds);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
+
+const meters = (value: number | null) => value == null ? "—" : `${Number(value.toFixed(1))} 米`;
+const locationLabel = (value: string) => value === "synthetic_demo" ? "标注位置" : labelLocationSource(value);
+const explain = (error: unknown, fallback: string) => error instanceof ApiRequestError ? friendlyApiError(error.message) : fallback;
+
+async function loadCaptureResult(jobId: string): Promise<CaptureResult> {
+  const detail = await api.verification(jobId);
+  const compliance = ACTIVE_JOBS.has(detail.job.status)
+    ? null
+    : await api.getCompliance(jobId).catch(() => null);
+  return { detail, compliance: compliance?.job_id === jobId ? compliance : null };
+}
+
+export function WorkOrderCapturePanel({ workOrder, onWorkOrderUpdated, onCaptureMarkerChange }: Props) {
   const [captures, setCaptures] = useState<EvidenceCapture[]>([]);
-  const [selectedCaptureId, setSelectedCaptureId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<VerificationDetail | null>(null);
-  const [compliance, setCompliance] = useState<ComplianceEvaluation | null>(null);
-  const [historyMeta, setHistoryMeta] = useState<Record<string, HistoryMeta>>({});
-  const [selectionLoading, setSelectionLoading] = useState(false);
-  const [reviewing, setReviewing] = useState(false);
-  const [reviewError, setReviewError] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [results, setResults] = useState<Record<string, CaptureResult>>({});
+  const [historyBadges, setHistoryBadges] = useState<Record<string, { status: string; verdict?: string }>>({});
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [detailError, setDetailError] = useState("");
+  const [resultRevision, setResultRevision] = useState(0);
+  const [mutation, setMutation] = useState<"upload" | "review" | null>(null);
   const [notice, setNotice] = useState("");
-  const [uploading, setUploading] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [reviewError, setReviewError] = useState<{ captureId: string; message: string } | null>(null);
   const [locating, setLocating] = useState(false);
-  const [polling, setPolling] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-
   const [file, setFile] = useState<File | null>(null);
-  const [clientCapturedAt, setClientCapturedAt] = useState(() =>
-    new Date().toISOString().slice(0, 16),
-  );
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
-  const [accuracyM, setAccuracyM] = useState("");
-  const [locationSource, setLocationSource] = useState<LocationSource>("synthetic_demo");
-  const [syntheticDemo, setSyntheticDemo] = useState(true);
-  const [deviceId, setDeviceId] = useState("WEB-WORK-ORDER");
-  const [metadataText, setMetadataText] = useState(
-    '{"source":"engineering-workbench","privacy":"user-provided"}',
-  );
-  const [analyzer, setAnalyzer] = useState<AnalyzerName>("demo_fixture");
+  const [accuracy, setAccuracy] = useState("");
+  const [locationSource, setLocationSource] = useState<LocationSource>("unknown");
+  const [captureTime, setCaptureTime] = useState(localTime);
+  const [deviceId, setDeviceId] = useState("");
+  const [metadataText, setMetadataText] = useState("");
+  const [adapters, setAdapters] = useState<CapabilityMeta["adapters"] | null>(null);
+  const [analyzerOverride, setAnalyzerOverride] = useState<AnalyzerName | null>(null);
+  const [markerSource, setMarkerSource] = useState<"capture" | "form">("capture");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const mounted = useRef(false);
+  const listSequence = useRef(0);
+  const mutationLock = useRef(false);
+  const orderUpdate = useRef(onWorkOrderUpdated);
+  orderUpdate.current = onWorkOrderUpdated;
+  const selectedRef = useRef(selectedId);
+  selectedRef.current = selectedId;
+  const analyzer = analyzerOverride ?? (adapters?.remote_http?.enabled ? "remote_http" : "stub");
+  const selected = captures.find((capture) => capture.id === selectedId) ?? null;
+  const jobId = selected?.verification_job_id ?? null;
+  const result = selected && results[selected.id]?.detail.job.id === jobId ? results[selected.id] : null;
+  const job = result?.detail.job ?? null;
+  const preview = result?.detail.evidence.id === selected?.evidence_id ? result?.detail.evidence : null;
+  const canUpload = Boolean(workOrder.baseline_id && CAPTURE_ALLOWED.has(workOrder.status));
 
-  const selectionSeq = useRef(0);
-  const selectedCaptureIdRef = useRef<string | null>(null);
-  selectedCaptureIdRef.current = selectedCaptureId;
-
-  const setFriendlyError = (raw: string) => {
-    setError(friendlyApiError(raw));
-    setErrorDetail(raw);
-  };
-
-  const loadCaptureDetails = useCallback(
-    async (capture: EvidenceCapture, seq: number) => {
-      const jobId = capture.verification_job_id;
-      if (!jobId) {
-        if (seq === selectionSeq.current) {
-          setDetail(null);
-          setCompliance(null);
-          setSelectionLoading(false);
-          setHistoryMeta((prev) => ({
-            ...prev,
-            [capture.id]: { jobStatus: null, verdict: null, loading: false },
-          }));
-        }
-        return;
-      }
-
-      setHistoryMeta((prev) => ({
-        ...prev,
-        [capture.id]: {
-          jobStatus: prev[capture.id]?.jobStatus ?? null,
-          verdict: prev[capture.id]?.verdict ?? null,
-          loading: true,
-        },
-      }));
-
-      let nextDetail: VerificationDetail | null = null;
-      let nextCompliance: ComplianceEvaluation | null = null;
-      let jobStatus: string | null = null;
-      let verdict: string | null = null;
-
-      try {
-        nextDetail = await api.verification(jobId);
-        jobStatus = nextDetail.job.status;
-        try {
-          nextCompliance = await api.getCompliance(jobId);
-          verdict = nextCompliance.verdict;
-        } catch {
-          nextCompliance = null;
-          verdict = null;
-        }
-      } catch {
-        nextDetail = null;
-        nextCompliance = null;
-      }
-
-      if (seq !== selectionSeq.current) {
-        // Stale request: still update history meta for list badges, not main detail.
-        setHistoryMeta((prev) => ({
-          ...prev,
-          [capture.id]: { jobStatus, verdict, loading: false },
-        }));
-        return;
-      }
-
-      setDetail(nextDetail);
-      setCompliance(nextCompliance);
-      setSelectionLoading(false);
-      setHistoryMeta((prev) => ({
-        ...prev,
-        [capture.id]: { jobStatus, verdict, loading: false },
-      }));
-    },
-    [],
-  );
-
-  const selectCapture = useCallback(
-    (captureId: string) => {
-      const capture = captures.find((c) => c.id === captureId);
-      if (!capture) return;
-      const seq = ++selectionSeq.current;
-      setSelectedCaptureId(captureId);
-      setSelectionLoading(true);
-      setDetail(null);
-      setCompliance(null);
-      void loadCaptureDetails(capture, seq);
-    },
-    [captures, loadCaptureDetails],
-  );
-
-  const refreshCaptures = useCallback(
-    async (preferCaptureId?: string | null) => {
-      try {
-        const rows = await api.listWorkOrderCaptures(workOrder.id);
-        setCaptures(rows);
-        const nextId =
-          preferCaptureId && rows.some((r) => r.id === preferCaptureId)
-            ? preferCaptureId
-            : selectedCaptureIdRef.current && rows.some((r) => r.id === selectedCaptureIdRef.current)
-              ? selectedCaptureIdRef.current
-              : pickDefaultCaptureId(rows);
-        if (nextId) {
-          const capture = rows.find((r) => r.id === nextId);
-          if (capture) {
-            const seq = ++selectionSeq.current;
-            setSelectedCaptureId(nextId);
-            setSelectionLoading(true);
-            setDetail(null);
-            setCompliance(null);
-            void loadCaptureDetails(capture, seq);
-          }
-        } else {
-          setSelectedCaptureId(null);
-          setDetail(null);
-          setCompliance(null);
-        }
-        // Prefetch meta for list rows (status/verdict badges)
-        for (const cap of rows) {
-          if (!cap.verification_job_id) {
-            setHistoryMeta((prev) => ({
-              ...prev,
-              [cap.id]: { jobStatus: null, verdict: null, loading: false },
-            }));
-            continue;
-          }
-          void (async () => {
-            try {
-              const d = await api.verification(cap.verification_job_id!);
-              let verdict: string | null = null;
-              try {
-                const c = await api.getCompliance(cap.verification_job_id!);
-                verdict = c.verdict;
-              } catch {
-                verdict = null;
-              }
-              setHistoryMeta((prev) => ({
-                ...prev,
-                [cap.id]: { jobStatus: d.job.status, verdict, loading: false },
-              }));
-            } catch {
-              setHistoryMeta((prev) => ({
-                ...prev,
-                [cap.id]: { jobStatus: null, verdict: null, loading: false },
-              }));
-            }
-          })();
-        }
-      } catch (err) {
-        setFriendlyError(err instanceof ApiRequestError ? err.message : "无法加载核验记录");
-      }
-    },
-    [workOrder.id, loadCaptureDetails],
-  );
-
-  // Reviewer approves the selected capture's verification; the finding case can
-  // then enter the remediation loop (start-remediation requires an approved source).
-  const approveCapture = async () => {
-    const job = detail?.job;
-    if (!job) return;
-    setReviewing(true);
-    setReviewError(null);
+  const refreshCaptures = useCallback(async (preferredId?: string) => {
+    const request = ++listSequence.current;
+    setHistoryLoading(true);
+    setHistoryError("");
     try {
-      await api.review(job.id, {
-        decision: "approve",
-        reviewer: "现场复核员",
-        note: "批准该工单采集证据，允许案件进入整改与交付流转",
+      const rows = await api.listWorkOrderCaptures(workOrder.id);
+      if (request !== listSequence.current) return;
+      setCaptures(rows);
+      setSelectedId((current) => {
+        const desired = preferredId ?? current;
+        return rows.some((row) => row.id === desired) ? desired : pickDefaultCaptureId(rows);
       });
-      await refreshCaptures(selectedCaptureIdRef.current);
-    } catch (err) {
-      setReviewError(err instanceof Error ? err.message : "复核失败");
+      setResultRevision((revision) => revision + 1);
+    } catch (error) {
+      if (request === listSequence.current) setHistoryError(explain(error, "无法读取采集记录"));
     } finally {
-      setReviewing(false);
+      if (request === listSequence.current) setHistoryLoading(false);
     }
-  };
+  }, [workOrder.id]);
 
   useEffect(() => {
+    mounted.current = true;
     void refreshCaptures();
+    return () => {
+      mounted.current = false;
+      listSequence.current += 1;
+    };
   }, [refreshCaptures]);
 
   useEffect(() => {
-    if (syntheticDemo) setLocationSource("synthetic_demo");
-  }, [syntheticDemo]);
+    let live = true;
+    void api.meta().then((meta) => {
+      if (!live) return;
+      setAdapters(meta.adapters);
+    }).catch(() => {});
+    return () => { live = false; };
+  }, []);
 
   useEffect(() => {
-    const lat = Number(latitude);
-    const lon = Number(longitude);
-    if (Number.isFinite(lat) && Number.isFinite(lon) && latitude !== "" && longitude !== "") {
-      onCaptureMarkerChange?.({
-        longitude: lon,
-        latitude: lat,
-        synthetic: syntheticDemo || locationSource === "synthetic_demo",
-      });
-    } else {
-      onCaptureMarkerChange?.(null);
-    }
-  }, [latitude, longitude, syntheticDemo, locationSource, onCaptureMarkerChange]);
+    setDetailError("");
+    setDetailLoading(Boolean(selectedId && jobId));
+    if (!selectedId || !jobId) return;
 
-  // Poll only the currently selected capture's job.
-  useEffect(() => {
-    if (!detail || !selectedCaptureId) return;
-    const selected = captures.find((c) => c.id === selectedCaptureId);
-    if (!selected?.verification_job_id || selected.verification_job_id !== detail.job.id) {
-      setPolling(false);
-      return;
-    }
-    if (!["queued", "running"].includes(detail.job.status)) {
-      setPolling(false);
-      return;
-    }
-    setPolling(true);
-    const captureIdAtStart = selectedCaptureId;
-    const jobId = detail.job.id;
-    const seqAtStart = selectionSeq.current;
-    const timer = window.setTimeout(async () => {
-      if (selectionSeq.current !== seqAtStart || selectedCaptureIdRef.current !== captureIdAtStart) {
-        return;
-      }
+    let disposed = false;
+    let timer: number | undefined;
+    const poll = async () => {
       try {
-        const d = await api.verification(jobId);
-        if (selectionSeq.current !== seqAtStart || selectedCaptureIdRef.current !== captureIdAtStart) {
-          return;
-        }
-        setDetail(d);
-        if (!["queued", "running"].includes(d.job.status)) {
-          let nextComp: ComplianceEvaluation | null = null;
+        const loaded = await loadCaptureResult(jobId);
+        if (disposed) return;
+        setResults((previous) => ({ ...previous, [selectedId]: loaded }));
+        setDetailLoading(false);
+        setDetailError("");
+        const state = loaded.detail.job.status;
+        if (ACTIVE_JOBS.has(state)) {
+          timer = window.setTimeout(() => void poll(), 1600);
+        } else {
           try {
-            nextComp = await api.getCompliance(jobId);
+            const order = await api.getWorkOrder(workOrder.id);
+            if (!disposed) orderUpdate.current?.(order);
           } catch {
-            nextComp = null;
+            // Keep the latest order returned by its own endpoint.
           }
-          if (selectionSeq.current !== seqAtStart || selectedCaptureIdRef.current !== captureIdAtStart) {
-            return;
-          }
-          setCompliance(nextComp);
-          setHistoryMeta((prev) => ({
-            ...prev,
-            [captureIdAtStart]: {
-              jobStatus: d.job.status,
-              verdict: nextComp?.verdict ?? null,
-              loading: false,
-            },
-          }));
-          const wo = await api.getWorkOrder(workOrder.id);
-          onWorkOrderUpdated?.(wo);
         }
-      } catch {
-        /* keep last state */
+      } catch (error) {
+        if (disposed) return;
+        setDetailLoading(false);
+        setDetailError(explain(error, "无法读取核验结果"));
+        timer = window.setTimeout(() => void poll(), 4800);
       }
-    }, 1200);
-    return () => window.clearTimeout(timer);
-  }, [detail, selectedCaptureId, captures, workOrder.id, onWorkOrderUpdated]);
+    };
+    void poll();
+    return () => {
+      disposed = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [selectedId, jobId, resultRevision, workOrder.id]);
 
-  const requestBrowserLocation = () => {
+  useEffect(() => {
+    let disposed = false;
+    const refreshBadges = async () => {
+      for (const capture of captures) {
+        if (disposed) return;
+        if (!capture.verification_job_id || capture.id === selectedRef.current) continue;
+        try {
+          const { detail, compliance } = await loadCaptureResult(capture.verification_job_id);
+          if (!disposed) setHistoryBadges((previous) => ({
+            ...previous,
+            [capture.id]: { status: detail.job.status, verdict: compliance?.verdict },
+          }));
+        } catch {
+          // A failed background lookup does not block other records.
+        }
+      }
+    };
+    void refreshBadges();
+    return () => { disposed = true; };
+  }, [captures]);
+
+  useEffect(() => {
+    if (!onCaptureMarkerChange) return;
+    const hasFormPosition = markerSource === "form" && latitude.trim() !== "" && longitude.trim() !== "";
+    const lat = hasFormPosition ? Number(latitude) : selected?.latitude;
+    const lon = hasFormPosition ? Number(longitude) : selected?.longitude;
+    const valid = lat != null && lon != null && Number.isFinite(lat) && Number.isFinite(lon)
+      && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
+    onCaptureMarkerChange(valid ? {
+      longitude: lon,
+      latitude: lat,
+      synthetic: hasFormPosition ? locationSource === "synthetic_demo" : selected?.is_synthetic_location,
+    } : null);
+  }, [latitude, longitude, locationSource, markerSource, onCaptureMarkerChange, selected]);
+
+  const requestPosition = () => {
     if (!navigator.geolocation) {
-      setFriendlyError("当前设备不支持自动定位，请手工填写位置。");
-      setLocationSource("manual");
-      setSyntheticDemo(false);
+      setFormError("设备定位不可用，可手动填写经纬度。");
       return;
     }
     setLocating(true);
-    setError(null);
-    setErrorDetail(null);
+    setFormError("");
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLatitude(String(pos.coords.latitude));
-        setLongitude(String(pos.coords.longitude));
-        setAccuracyM(
-          pos.coords.accuracy != null && Number.isFinite(pos.coords.accuracy)
-            ? String(Math.round(pos.coords.accuracy * 10) / 10)
-            : "",
-        );
-        setSyntheticDemo(false);
+      ({ coords, timestamp }) => {
+        if (!mounted.current) return;
+        setLatitude(String(coords.latitude));
+        setLongitude(String(coords.longitude));
+        setAccuracy(Number.isFinite(coords.accuracy) ? String(Math.round(coords.accuracy * 10) / 10) : "");
+        setCaptureTime(localTime(timestamp));
         setLocationSource("device_gps");
-        setClientCapturedAt(new Date(pos.timestamp).toISOString().slice(0, 16));
-        setNotice(
-          pos.coords.accuracy != null
-            ? `已获取设备定位，精度约 ${pos.coords.accuracy.toFixed(1)} ${COPY.unitMeters}`
-            : "已获取设备定位",
-        );
+        setMarkerSource("form");
         setLocating(false);
       },
-      (geoErr) => {
-        setFriendlyError(`定位失败：${geoErr.message}。请手工填写位置。`);
-        setLocationSource("manual");
-        setSyntheticDemo(false);
+      () => {
+        if (!mounted.current) return;
+        setFormError("未获取设备定位，可手动填写经纬度。");
         setLocating(false);
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
     );
   };
 
-  const onUpload = async (event: React.FormEvent) => {
+  const editPosition = (setter: (value: string) => void, value: string) => {
+    setter(value);
+    setMarkerSource("form");
+    if (locationSource !== "synthetic_demo") setLocationSource("manual");
+  };
+
+  const upload = async (event: FormEvent) => {
     event.preventDefault();
-    if (!file) {
-      setFriendlyError(`请选择${COPY.fieldMedia}`);
+    if (!file || !canUpload || mutationLock.current) return;
+    const lat = latitude.trim() ? Number(latitude) : null;
+    const lon = longitude.trim() ? Number(longitude) : null;
+    const acc = accuracy.trim() ? Number(accuracy) : null;
+    if ((lat != null && (!Number.isFinite(lat) || Math.abs(lat) > 90))
+      || (lon != null && (!Number.isFinite(lon) || Math.abs(lon) > 180))
+      || (acc != null && (!Number.isFinite(acc) || acc < 0))) {
+      setFormError("请检查经纬度范围和定位精度。");
       return;
     }
-    const lat = latitude.trim() === "" ? null : Number(latitude);
-    const lon = longitude.trim() === "" ? null : Number(longitude);
-    const acc = accuracyM.trim() === "" ? null : Number(accuracyM);
-    if (lat != null && !Number.isFinite(lat)) {
-      setFriendlyError("纬度须为有效数字");
-      return;
-    }
-    if (lon != null && !Number.isFinite(lon)) {
-      setFriendlyError("经度须为有效数字");
-      return;
-    }
-    if (acc != null && !Number.isFinite(acc)) {
-      setFriendlyError("定位精度须为有效数字");
-      return;
-    }
-    let metadata: Record<string, unknown> = {};
+    let metadata: Record<string, unknown>;
     try {
       metadata = JSON.parse(metadataText || "{}") as Record<string, unknown>;
-      if (typeof metadata !== "object" || metadata === null || Array.isArray(metadata)) {
-        throw new Error("metadata 必须是 JSON 对象");
-      }
-    } catch (e) {
-      setFriendlyError(e instanceof Error ? e.message : "元数据格式无效");
+      if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) throw new Error();
+    } catch {
+      setFormError("附加信息须为有效的 JSON 对象。");
       return;
     }
-
-    const source: LocationSource = syntheticDemo ? "synthetic_demo" : locationSource;
-    const capturedIso = clientCapturedAt
-      ? new Date(clientCapturedAt).toISOString()
-      : new Date().toISOString();
-
-    setUploading(true);
-    setError(null);
-    setErrorDetail(null);
-    setNotice("正在提交核验…");
+    const date = captureTime ? new Date(captureTime) : new Date();
+    if (!Number.isFinite(date.getTime())) {
+      setFormError("请填写有效的采集时间。");
+      return;
+    }
+    mutationLock.current = true;
+    setMutation("upload");
+    setFormError("");
+    setNotice("");
     try {
-      const result = await api.uploadWorkOrderVerification({
+      const updated = await api.uploadWorkOrderVerification({
         workOrderId: workOrder.id,
         file,
         analyzer,
         latitude: lat,
         longitude: lon,
         accuracy_m: acc,
-        location_source: source,
-        is_synthetic_location: syntheticDemo || source === "synthetic_demo",
-        client_captured_at: capturedIso,
-        device_id: deviceId || "WEB-WORK-ORDER",
+        location_source: locationSource,
+        is_synthetic_location: locationSource === "synthetic_demo",
+        client_captured_at: date.toISOString(),
+        device_id: deviceId.trim() || "WEB-WORK-ORDER",
         metadata: {
+          source: "engineering-workbench",
+          privacy: "user-provided",
           ...metadata,
-          synthetic_demo: syntheticDemo || source === "synthetic_demo",
+          synthetic_demo: locationSource === "synthetic_demo",
         },
       });
-      onWorkOrderUpdated?.(result.work_order);
-      setNotice(
-        `已提交 · ${labelSpatialStatus(result.capture.spatial_check_status)}` +
-          (result.capture.is_synthetic_location ? ` · ${COPY.sampleDataBadge}` : ""),
-      );
+      orderUpdate.current?.(updated.work_order);
+      if (!mounted.current) return;
       setFile(null);
-      await refreshCaptures(result.capture.id);
-    } catch (err) {
-      setFriendlyError(err instanceof ApiRequestError ? err.message : "提交失败");
-      setNotice("");
+      if (fileRef.current) fileRef.current.value = "";
+      setNotice(`现场资料已提交 · ${labelSpatialStatus(updated.capture.spatial_check_status)}`);
+      setCaptures((previous) => [updated.capture, ...previous.filter((row) => row.id !== updated.capture.id)]);
+      setMarkerSource("capture");
+      setSelectedId(updated.capture.id);
+      void refreshCaptures(updated.capture.id);
+    } catch (error) {
+      if (mounted.current) setFormError(explain(error, "无法提交现场资料"));
     } finally {
-      setUploading(false);
+      mutationLock.current = false;
+      if (mounted.current) setMutation(null);
     }
   };
 
-  const selectedCapture = captures.find((c) => c.id === selectedCaptureId) ?? null;
-
-  const observations = useMemo(() => {
-    const result = detail?.job.result;
-    if (!result || typeof result !== "object") return null;
-    const obs = (result as Record<string, unknown>).observations;
-    if (!obs || typeof obs !== "object") return null;
-    const measurements = (obs as Record<string, unknown>).measurements;
-    if (measurements && typeof measurements === "object") {
-      return measurements as Record<string, unknown>;
+  const approve = async () => {
+    if (!selected || !job || job.status !== "needs_review" || detailLoading || mutationLock.current) return;
+    const captureId = selected.id;
+    mutationLock.current = true;
+    setMutation("review");
+    setReviewError(null);
+    try {
+      const reviewed = await api.review(job.id, {
+        decision: "approve",
+        reviewer: "现场复核员",
+        note: "通过工单现场资料复核",
+      });
+      if (mounted.current) {
+        setResults((previous) => {
+          const existing = previous[captureId];
+          return existing ? {
+            ...previous,
+            [captureId]: { ...existing, detail: { ...existing.detail, ...reviewed } },
+          } : previous;
+        });
+        setNotice("人工复核已通过");
+        setResultRevision((revision) => revision + 1);
+      }
+      try {
+        orderUpdate.current?.(await api.getWorkOrder(workOrder.id));
+      } catch {
+        // The returned job already confirms the review.
+      }
+    } catch (error) {
+      if (mounted.current) setReviewError({ captureId, message: explain(error, "无法提交复核") });
+    } finally {
+      mutationLock.current = false;
+      if (mounted.current) setMutation(null);
     }
-    return obs as Record<string, unknown>;
-  }, [detail]);
-
-  const structuredObs = useMemo(() => structureObservations(observations), [observations]);
-
-  const isDemoAnalyzer =
-    detail?.job.analyzer_name === "demo_fixture" ||
-    detail?.job.analyzer_name === "stub" ||
-    analyzer === "demo_fixture" ||
-    analyzer === "stub";
-
-  const differenceRows = useMemo(
-    () => groupDifferenceRows(compliance?.differences),
-    [compliance],
-  );
-
-  const spatialSummary = selectedCapture
-    ? spatialBusinessSummary({
-        spatial_check_status: selectedCapture.spatial_check_status,
-        latitude: selectedCapture.latitude,
-        longitude: selectedCapture.longitude,
-        accuracy_m: selectedCapture.accuracy_m,
-        gps_accuracy_threshold_m: selectedCapture.gps_accuracy_threshold_m,
-        distance_to_target_m: selectedCapture.distance_to_target_m,
-        tolerance_m: selectedCapture.tolerance_m,
-      })
-    : "";
-
-  // Association guard for display: detail/compliance must match selected capture job.
-  const selectedJobId = selectedCapture?.verification_job_id ?? null;
-  const detailMatches =
-    !selectedJobId || (detail != null && detail.job.id === selectedJobId);
-  const complianceMatches =
-    !selectedJobId ||
-    compliance == null ||
-    compliance.job_id === selectedJobId;
-  const safeDetail = detailMatches ? detail : null;
-  const safeCompliance = complianceMatches && detailMatches ? compliance : null;
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <p className="text-xs text-slate-500">当前工单</p>
-            <p className="text-sm font-semibold text-slate-900">{workOrder.work_order_code}</p>
-            <p className="mt-1 text-[11px] text-slate-500">
-              {labelWorkOrderStatus(workOrder.status)} · {COPY.fieldSpatialTolerance}{" "}
-              {workOrder.spatial_tolerance_m}
-              {COPY.unitMeters} · {COPY.fieldGpsAccuracy} {workOrder.gps_accuracy_threshold_m}
-              {COPY.unitMeters}
-            </p>
-          </div>
-          <Link
-            to={`/work-orders/${workOrder.id}`}
-            className="text-xs font-medium text-sky-700 hover:underline"
-          >
-            {COPY.independentWorkOrderPage}
-          </Link>
+    <div className="gis-capture-workspace" data-view={canUpload || !selected ? "capture" : "review"}>
+      {(canUpload || !selected) && <section className="fm-panel gis-capture-form">
+        <div className="gis-section-head">
+          <h3><FileUp size={15} aria-hidden="true" /> 现场采集</h3>
         </div>
-        {(syntheticDemo || locationSource === "synthetic_demo") && (
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-medium text-violet-900">
-            {COPY.sampleDataBadge} · {COPY.captureMode}
-          </div>
-        )}
-      </div>
-
-      {error ? (
-        <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
-          <p>{error}</p>
-          {errorDetail && errorDetail !== error ? (
-            <details className="mt-1">
-              <summary className="cursor-pointer">{COPY.techDetails}</summary>
-              <pre className="mt-1 whitespace-pre-wrap break-all text-[10px]">{errorDetail}</pre>
-            </details>
-          ) : null}
-        </div>
-      ) : null}
-      {notice ? <Notice type={uploading || polling ? "info" : "success"} message={notice} /> : null}
-      {polling ? <Notice type="info" message="核验进行中，正在更新当前记录…" /> : null}
-
-      <form className="space-y-3" onSubmit={(e) => void onUpload(e)}>
-        <label className="block">
-          <span className="text-xs font-medium text-slate-600">{COPY.fieldMedia}</span>
-          <input
-            type="file"
-            accept="image/jpeg,image/png,video/mp4,video/webm,.jpg,.jpeg,.png,.mp4,.webm"
-            className="mt-1 block w-full text-xs"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          />
-        </label>
-
-        <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
-          <p className="text-xs font-medium text-slate-700">{COPY.captureMode}</p>
-          <label className="mt-2 flex cursor-pointer items-start gap-2 text-xs text-slate-700">
-            <input
-              type="checkbox"
-              className="mt-0.5"
-              checked={syntheticDemo}
-              onChange={(e) => setSyntheticDemo(e.target.checked)}
-            />
-            <span>
-              <strong>{COPY.useSampleLocation}</strong>
-              <br />
-              <span className="text-slate-500">{COPY.useSampleLocationHelp}</span>
-            </span>
-          </label>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={requestBrowserLocation}
-            disabled={locating || syntheticDemo}
-            className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-800 disabled:opacity-50"
-          >
-            {locating ? "定位中…" : "使用设备定位"}
-          </button>
-          <span className="self-center text-[10px] text-slate-500">失败时可手工填写</span>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <label className="block">
-            <span className="text-[11px] text-slate-500">纬度</span>
-            <input
-              value={latitude}
-              onChange={(e) => setLatitude(e.target.value)}
-              inputMode="decimal"
-              className="mt-1 w-full rounded-xl border border-slate-200 px-2 py-1.5 text-xs"
-            />
-          </label>
-          <label className="block">
-            <span className="text-[11px] text-slate-500">经度</span>
-            <input
-              value={longitude}
-              onChange={(e) => setLongitude(e.target.value)}
-              inputMode="decimal"
-              className="mt-1 w-full rounded-xl border border-slate-200 px-2 py-1.5 text-xs"
-            />
-          </label>
-          <label className="block">
-            <span className="text-[11px] text-slate-500">
-              {COPY.reportedAccuracy}（{COPY.unitMeters}）
-            </span>
-            <input
-              value={accuracyM}
-              onChange={(e) => setAccuracyM(e.target.value)}
-              inputMode="decimal"
-              className="mt-1 w-full rounded-xl border border-slate-200 px-2 py-1.5 text-xs"
-            />
-          </label>
-          <label className="block">
-            <span className="text-[11px] text-slate-500">{COPY.captureMode}</span>
-            <select
-              value={syntheticDemo ? "synthetic_demo" : locationSource}
-              disabled={syntheticDemo}
-              onChange={(e) => setLocationSource(e.target.value as LocationSource)}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-2 py-1.5 text-xs"
-            >
-              <option value="synthetic_demo">{labelLocationSource("synthetic_demo")}</option>
-              <option value="device_gps">{labelLocationSource("device_gps")}</option>
-              <option value="manual">{labelLocationSource("manual")}</option>
-              <option value="unknown">{labelLocationSource("unknown")}</option>
-            </select>
-          </label>
-          <label className="col-span-2 block">
-            <span className="text-[11px] text-slate-500">{COPY.captureTime}</span>
-            <input
-              type="datetime-local"
-              value={clientCapturedAt}
-              onChange={(e) => setClientCapturedAt(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-2 py-1.5 text-xs"
-            />
-          </label>
-        </div>
-
-        <div>
-          <button
-            type="button"
-            className="text-[11px] font-medium text-sky-800 underline"
-            onClick={() => setAdvancedOpen((v) => !v)}
-          >
-            {advancedOpen
-              ? `收起${COPY.advancedSettings}`
-              : `${COPY.advancedSettings} / ${COPY.testConfig}`}
-          </button>
-          {advancedOpen ? (
-            <div className="mt-2 space-y-2 rounded-xl border border-slate-100 bg-slate-50 p-2">
-              <p className="text-[10px] text-slate-500">{COPY.analyzerHelp}</p>
-              <label className="block text-[11px] text-slate-500">
-                设备编号
-                <input
-                  value={deviceId}
-                  onChange={(e) => setDeviceId(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-2 py-1.5 text-xs"
-                />
-              </label>
-              <label className="block text-[11px] text-slate-500">
-                附加说明（JSON）
-                <textarea
-                  value={metadataText}
-                  onChange={(e) => setMetadataText(e.target.value)}
-                  rows={2}
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-2 py-1.5 font-mono text-[11px]"
-                />
-              </label>
-              <label className="block text-[11px] text-slate-500">
-                测试分析配置
-                <select
-                  value={analyzer}
-                  onChange={(e) => setAnalyzer(e.target.value as AnalyzerName)}
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-2 py-1.5 text-xs"
-                >
-                  <option value="demo_fixture">业务流程验证（样例观察）</option>
-                  <option value="stub">链路占位（无观察）</option>
+        {canUpload && !file && <FieldScene scene="capture"
+          guidance="取景时保留工点全貌，再补拍相关细节和量测记录。" />}
+        {canUpload ? (
+          <form className="gis-form gis-capture-form-body" onSubmit={(event) => void upload(event)}>
+            <label className="gis-upload">
+              <Camera size={19} aria-hidden="true" />
+              <span>{file?.name || "选择现场照片或视频"}</span>
+              <small>照片 · JPG、PNG / 视频 · MP4、WebM</small>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,video/mp4,video/webm,.jpg,.jpeg,.png,.mp4,.webm"
+                aria-label="选择现场照片或视频"
+                disabled={Boolean(mutation)}
+                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              />
+            </label>
+            <button type="button" className="fm-button" onClick={requestPosition} disabled={locating || Boolean(mutation)}>
+              <Crosshair size={14} aria-hidden="true" /> {locating ? "定位中…" : "获取设备定位"}
+            </button>
+            <div className="gis-form-pair">
+              <label>纬度<input className="fm-input" inputMode="decimal" value={latitude} onChange={(event) => editPosition(setLatitude, event.target.value)} disabled={Boolean(mutation)} /></label>
+              <label>经度<input className="fm-input" inputMode="decimal" value={longitude} onChange={(event) => editPosition(setLongitude, event.target.value)} disabled={Boolean(mutation)} /></label>
+              <label>精度（米）<input className="fm-input" inputMode="decimal" value={accuracy} onChange={(event) => editPosition(setAccuracy, event.target.value)} disabled={Boolean(mutation)} /></label>
+              <label>位置来源
+                <select className="fm-input" value={locationSource} onChange={(event) => setLocationSource(event.target.value as LocationSource)} disabled={Boolean(mutation)}>
+                  <option value="unknown">未提供</option>
+                  <option value="manual">手动录入</option>
+                  <option value="synthetic_demo">标注位置</option>
+                  {locationSource === "device_gps" && <option value="device_gps">设备定位</option>}
                 </select>
               </label>
             </div>
-          ) : null}
-        </div>
+            <label>采集时间<input className="fm-input" type="datetime-local" value={captureTime} onChange={(event) => setCaptureTime(event.target.value)} disabled={Boolean(mutation)} /></label>
+            <details className="gis-disclosure">
+              <summary>采集设置</summary>
+              <div className="gis-form">
+                <label>核验方式
+                  <select className="fm-input" value={analyzer} onChange={(event) => setAnalyzerOverride(event.target.value as AnalyzerName)} disabled={Boolean(mutation)}>
+                    <option value="stub">{ANALYZERS.stub}</option>
+                    {adapters?.remote_http?.enabled && <option value="remote_http">{ANALYZERS.remote_http}</option>}
+                    {adapters?.demo_fixture?.enabled && <option value="demo_fixture">{ANALYZERS.demo_fixture}</option>}
+                  </select>
+                </label>
+                <label>设备编号<input className="fm-input" value={deviceId} onChange={(event) => setDeviceId(event.target.value)} disabled={Boolean(mutation)} /></label>
+                <label>附加信息<textarea className="fm-input" rows={2} value={metadataText} onChange={(event) => setMetadataText(event.target.value)} disabled={Boolean(mutation)} /></label>
+              </div>
+            </details>
+            {mutation === "upload" && <OperationStatus detail="文件登记后会自动进入核验队列。">正在提交现场资料</OperationStatus>}
+            {locating && <OperationStatus>正在获取设备位置</OperationStatus>}
+            {formError && <Notice type="warning" message={formError} />}
+            <button type="submit" className="fm-button fm-button-primary" disabled={!file || Boolean(mutation) || locating}>
+              {mutation === "upload" ? "提交中…" : "提交核验"}
+            </button>
+          </form>
+        ) : (
+          <div className="gis-capture-form-body">
+            <p className="gis-empty">
+              {workOrder.status === "draft" ? "工单分派后可提交现场资料。" : !workOrder.baseline_id ? "工单缺少设计基线。" : "可查阅该工单已提交的现场资料。"}
+            </p>
+          </div>
+        )}
+      </section>}
 
-        <button
-          type="submit"
-          disabled={uploading || !file}
-          className="w-full rounded-2xl bg-sky-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
-        >
-          {uploading ? "提交中…" : COPY.submitVerification}
-        </button>
-        <p className="text-[10px] leading-4 text-slate-500">{COPY.spatialDisclaimer}</p>
-      </form>
-
-      {captures.length > 0 ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-3">
-          <h4 className="text-sm font-semibold text-slate-900">{COPY.verificationHistory}</h4>
-          <ul className="mt-2 space-y-2">
-            {captures.map((c) => {
-              const meta = historyMeta[c.id];
-              const selected = c.id === selectedCaptureId;
+      <div className="gis-capture-review">
+        {notice && <Notice type="success" message={notice} />}
+        <section className="fm-panel">
+          <div className="gis-section-head">
+            <h3><History size={15} aria-hidden="true" /> 核验记录 <span className="gis-count">{captures.length}</span></h3>
+            <button type="button" className="gis-icon-button" aria-label="刷新核验记录" disabled={historyLoading} onClick={() => void refreshCaptures()}>
+              <RefreshCw size={15} />
+            </button>
+          </div>
+          {historyError && <p className="gis-record-error" role="status">{historyError}</p>}
+          <ul className="gis-capture-history">
+            {captures.map((capture) => {
+              const data = results[capture.id];
+              const currentBadge = data && capture.id === selectedId
+                ? { status: data.detail.job.status, verdict: data.compliance?.verdict }
+                : historyBadges[capture.id];
+              const status = currentBadge?.status ?? data?.detail.job.status;
+              const verdict = currentBadge ? currentBadge.verdict : data?.compliance?.verdict;
               return (
-                <li key={c.id}>
-                  <button
-                    type="button"
-                    onClick={() => selectCapture(c.id)}
-                    aria-pressed={selected}
-                    className={cn(
-                      "w-full rounded-xl border px-3 py-2 text-left text-[11px] transition-all",
-                      selected
-                        ? "border-sky-400 bg-sky-50 ring-1 ring-sky-200"
-                        : "border-slate-100 bg-slate-50 hover:border-sky-200",
-                    )}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium text-slate-800">
-                        {COPY.submittedAt}{" "}
-                        {new Date(c.server_received_at).toLocaleString("zh-CN")}
-                      </span>
-                      {selected ? (
-                        <span className="rounded-full bg-sky-600 px-2 py-0.5 text-[10px] font-semibold text-white">
-                          当前查看
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-slate-600">
-                      <span>
-                        {COPY.locationStatus} {labelSpatialStatus(c.spatial_check_status)}
-                      </span>
-                      <span>
-                        {COPY.ruleVerdictStatus}{" "}
-                        {meta?.verdict
-                          ? labelRuleVerdict(meta.verdict)
-                          : c.verification_job_id
-                            ? meta?.loading
-                              ? "加载中"
-                              : "等待判定"
-                            : "—"}
-                      </span>
-                      <span>
-                        {COPY.humanReviewStatus}{" "}
-                        {meta?.jobStatus
-                          ? labelHumanReviewStatus(meta.jobStatus)
-                          : c.verification_job_id
-                            ? meta?.loading
-                              ? "加载中"
-                              : "—"
-                            : "等待创建核验任务"}
-                      </span>
-                      <span>
-                        {COPY.captureMode} {labelLocationSource(c.location_source)}
-                      </span>
-                      {c.is_synthetic_location ? <span>{COPY.sampleDataBadge}</span> : null}
-                      {workOrder.assigned_to ? (
-                        <span>
-                          {COPY.owner} {workOrder.assigned_to}
-                        </span>
-                      ) : null}
-                    </div>
+                <li key={capture.id}>
+                  <button type="button" aria-pressed={capture.id === selectedId} onClick={() => {
+                    setMarkerSource("capture");
+                    if (selectedId !== capture.id) {
+                      setDetailLoading(Boolean(capture.verification_job_id));
+                      setSelectedId(capture.id);
+                    }
+                  }}>
+                    <strong>{formatWorkbenchTime(capture.server_received_at)}</strong>
+                    <span>{labelSpatialStatus(capture.spatial_check_status)} · {locationLabel(capture.location_source)}</span>
+                    {status && <span>{labelTaskProgress(status)}{verdict ? ` · ${labelRuleVerdict(verdict)}` : ""}</span>}
                   </button>
                 </li>
               );
             })}
+            {!captures.length && <li className="gis-empty">{historyLoading ? "正在读取核验记录…" : "暂无核验记录"}</li>}
           </ul>
         </section>
-      ) : null}
-
-      {selectedCapture && !selectedCapture.verification_job_id ? (
-        <Notice type="info" message="等待创建核验任务" />
-      ) : null}
-      {selectionLoading ? <Notice type="info" message="正在加载所选核验记录…" /> : null}
-
-      {selectedCapture ? (
-        <section
-          className={cn(
-            "rounded-2xl border p-3",
-            spatialTone[selectedCapture.spatial_check_status] || spatialTone.skipped,
-          )}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <h4 className="text-sm font-semibold">{COPY.spatialCheck}</h4>
-            <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-bold">
-              {labelSpatialStatus(selectedCapture.spatial_check_status)}
-            </span>
-          </div>
-          <p className="mt-2 text-xs leading-5 font-medium">{spatialSummary}</p>
-          <dl className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-            <div>
-              <dt className="opacity-70">{COPY.distanceToObject}</dt>
-              <dd className="font-semibold">
-                {selectedCapture.distance_to_target_m == null
-                  ? "—"
-                  : `${selectedCapture.distance_to_target_m.toFixed(1)} ${COPY.unitMeters}`}
-              </dd>
-            </div>
-            <div>
-              <dt className="opacity-70">{COPY.allowedRange}</dt>
-              <dd className="font-semibold">
-                {selectedCapture.tolerance_m} {COPY.unitMeters}
-              </dd>
-            </div>
-            <div>
-              <dt className="opacity-70">{COPY.reportedAccuracy}</dt>
-              <dd className="font-semibold">
-                {selectedCapture.accuracy_m == null
-                  ? "—"
-                  : `${selectedCapture.accuracy_m} ${COPY.unitMeters}`}
-              </dd>
-            </div>
-            <div>
-              <dt className="opacity-70">{COPY.accuracyRequirement}</dt>
-              <dd className="font-semibold">
-                {selectedCapture.gps_accuracy_threshold_m} {COPY.unitMeters}
-              </dd>
-            </div>
-            <div>
-              <dt className="opacity-70">{COPY.captureMode}</dt>
-              <dd className="font-semibold">
-                {labelLocationSource(selectedCapture.location_source)}
-              </dd>
-            </div>
-            <div>
-              <dt className="opacity-70">{COPY.captureTime}</dt>
-              <dd className="font-semibold text-[10px]">
-                {selectedCapture.client_captured_at
-                  ? new Date(selectedCapture.client_captured_at).toLocaleString("zh-CN")
-                  : "—"}
-              </dd>
-            </div>
-          </dl>
-          <p className="mt-2 text-[10px] opacity-80">{COPY.spatialDisclaimer}</p>
-          <details className="mt-2 text-[10px]">
-            <summary className="cursor-pointer">{COPY.techDetails}</summary>
-            <pre className="mt-1 max-h-28 overflow-auto rounded-lg bg-white/70 p-1.5">
-              {JSON.stringify(
-                {
-                  spatial_check_status: selectedCapture.spatial_check_status,
-                  spatial_check_reason: selectedCapture.spatial_check_reason,
-                  location_source: selectedCapture.location_source,
-                  is_synthetic_location: selectedCapture.is_synthetic_location,
-                  server_received_at: selectedCapture.server_received_at,
-                  capture_id: selectedCapture.id,
-                  evidence_id: selectedCapture.evidence_id,
-                  verification_job_id: selectedCapture.verification_job_id,
-                  distance_to_target_m: selectedCapture.distance_to_target_m,
-                  accuracy_m: selectedCapture.accuracy_m,
-                  gps_accuracy_threshold_m: selectedCapture.gps_accuracy_threshold_m,
-                },
-                null,
-                2,
-              )}
-            </pre>
-          </details>
-        </section>
-      ) : null}
-
-      {safeDetail ? (
-        <section className="space-y-2 rounded-2xl border border-slate-200 bg-white p-3">
-          <h4 className="text-sm font-semibold text-slate-900">处理进度</h4>
-          <dl className="grid grid-cols-1 gap-1.5 text-[11px] sm:grid-cols-3">
-            <div className="rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
-              <dt className="text-slate-500">{COPY.taskProgress}</dt>
-              <dd className="font-semibold text-slate-900">
-                {labelTaskProgress(safeDetail.job.status)}
-              </dd>
-            </div>
-            <div className="rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
-              <dt className="text-slate-500">{COPY.humanReviewStatus}</dt>
-              <dd className="font-semibold text-slate-900">
-                {labelHumanReviewStatus(safeDetail.job.status)}
-              </dd>
-            </div>
-            <div className="rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
-              <dt className="text-slate-500">{COPY.ruleVerdictStatus}</dt>
-              <dd className="font-semibold text-slate-900">
-                {safeCompliance
-                  ? labelRuleVerdict(safeCompliance.verdict)
-                  : "等待判定"}
-              </dd>
-            </div>
-          </dl>
-          <p className="text-[10px] leading-4 text-slate-500">
-            规则初判由服务端规则引擎产生；人工复核在核验中心完成，二者含义不同。
-          </p>
-          <Link
-            to="/backend-workflow"
-            className="inline-flex text-xs font-medium text-sky-700 hover:underline"
-          >
-            {COPY.goVerificationCenter}
-          </Link>
-          <details className="text-[10px] text-slate-500">
-            <summary className="cursor-pointer">{COPY.techDetails}</summary>
-            <p className="mt-1 font-mono break-all">job_id={safeDetail.job.id}</p>
-            <p>
-              status={safeDetail.job.status} · analyzer={safeDetail.job.analyzer_name} ·
-              version={safeDetail.job.analyzer_version}
-            </p>
-            {safeDetail.job.error ? <p className="text-rose-700">{safeDetail.job.error}</p> : null}
-          </details>
-        </section>
-      ) : selectedCapture?.verification_job_id && !selectionLoading ? (
-        <Notice type="info" message="等待判定" />
-      ) : null}
-
-      <div className="grid grid-cols-1 gap-3">
-        <section className="rounded-2xl border border-slate-200 bg-white p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <h4 className="text-sm font-semibold text-slate-900">{COPY.observations}</h4>
-            {isDemoAnalyzer ? (
-              <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-900">
-                {COPY.resultSource}：{COPY.testAnalyzer}
-              </span>
-            ) : null}
-          </div>
-          {isDemoAnalyzer ? (
-            <p className="mt-1 text-[10px] text-slate-500">{COPY.testAnalyzerNote}</p>
-          ) : (
-            <p className="mt-1 text-[10px] text-slate-500">
-              识别结果为观察字段，不直接作为最终合规裁决。
-            </p>
-          )}
-          {structuredObs.known.length ? (
-            <dl className="mt-2 space-y-1.5 text-[11px]">
-              {structuredObs.known.map((item) => (
-                <div
-                  key={item.key}
-                  className="flex items-start justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5"
-                >
-                  <dt className="text-slate-500">{item.label}</dt>
-                  <dd className="font-medium text-slate-900">{item.displayValue}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : (
-            <p className="mt-2 text-xs text-slate-500">（等待核验完成）</p>
-          )}
-          <details className="mt-2 text-[10px]">
-            <summary className="cursor-pointer text-sky-800">
-              {COPY.techDetails}（原始识别 JSON）
-            </summary>
-            <pre className="mt-1 max-h-40 overflow-auto rounded-xl border border-slate-100 bg-slate-50 p-2 text-slate-700">
-              {observations ? JSON.stringify(observations, null, 2) : "null"}
-            </pre>
-            {structuredObs.unknown.length ? (
-              <pre className="mt-1 max-h-24 overflow-auto rounded-xl bg-slate-50 p-2">
-                {JSON.stringify(
-                  Object.fromEntries(structuredObs.unknown.map((u) => [u.key, u.rawValue])),
-                  null,
-                  2,
-                )}
-              </pre>
-            ) : null}
-          </details>
-        </section>
-
-        <section
-          className={cn(
-            "rounded-2xl border p-3",
-            safeCompliance
-              ? verdictTone[safeCompliance.verdict] || verdictTone.needs_review
-              : "border-slate-200 bg-white",
-          )}
-        >
-          <h4 className="text-sm font-semibold">{COPY.complianceJudgement}</h4>
-          {safeCompliance ? (
-            <>
-              <p className="mt-1 text-sm font-bold">
-                {COPY.ruleVerdictStatus}：{labelRuleVerdict(safeCompliance.verdict)}
-              </p>
-              <p className="mt-1 text-[11px]">
-                {COPY.ruleVersion} {safeCompliance.rule_version}
-                {safeCompliance.spatial_check_status
-                  ? ` · ${COPY.locationStatus} ${labelSpatialStatus(safeCompliance.spatial_check_status)}`
-                  : ""}
-              </p>
-              <div className="mt-2 grid gap-1 text-[11px]">
-                {differenceRows.ok.length ? (
-                  <p>
-                    {COPY.compliantItems}：{differenceRows.ok.join("、")}
-                  </p>
-                ) : null}
-                {differenceRows.bad.length ? (
-                  <p>
-                    {COPY.deviationItems}：{differenceRows.bad.join("、")}
-                  </p>
-                ) : null}
-                {differenceRows.pending.length ? (
-                  <p>
-                    {COPY.pendingItems}：{differenceRows.pending.join("、")}
-                  </p>
-                ) : null}
-              </div>
-              <p className="mt-2 text-[11px] leading-4 opacity-90">{COMPLIANCE_BUSINESS_NOTE}</p>
-              <details className="mt-2 text-[10px]">
-                <summary className="cursor-pointer">
-                  {COPY.judgementBasis} / {COPY.techDetails}
-                </summary>
-                <pre className="mt-1 max-h-40 overflow-auto rounded-lg bg-white/70 p-1.5">
-                  {JSON.stringify(
-                    {
-                      engine_version: safeCompliance.engine_version,
-                      rule_version: safeCompliance.rule_version,
-                      expected: safeCompliance.expected,
-                      observed: safeCompliance.observed,
-                      differences: safeCompliance.differences,
-                      field_labels: differenceRows.rawFields,
-                      notes: safeCompliance.notes,
-                    },
-                    null,
-                    2,
-                  )}
-                </pre>
-              </details>
-            </>
-          ) : selectedCapture?.verification_job_id ? (
-            <p className="mt-2 text-xs opacity-70">等待规则初判</p>
-          ) : (
-            <p className="mt-2 text-xs opacity-70">提交资料并完成分析后显示规则初判。</p>
-          )}
-        </section>
-      </div>
-
-      {selectedCapture ? (
-        <details className="rounded-2xl border border-slate-100 bg-slate-50 p-2 text-[10px] text-slate-600">
-          <summary className="cursor-pointer font-medium text-sky-800">
-            {COPY.techDetails}（当前记录标识）
-          </summary>
-          <pre className="mt-1 overflow-auto">
-            {JSON.stringify(
-              {
-                capture_id: selectedCapture.id,
-                evidence_id: selectedCapture.evidence_id,
-                job_id: selectedCapture.verification_job_id,
-                analyzer: safeDetail?.job.analyzer_name,
-                rule_version: safeCompliance?.rule_version,
-                engine_version: safeCompliance?.engine_version,
-                distance: selectedCapture.distance_to_target_m,
-                accuracy: selectedCapture.accuracy_m,
-                gps_threshold: selectedCapture.gps_accuracy_threshold_m,
-              },
-              null,
-              2,
+        {selected && (
+          <div className="gis-review-detail">
+            {(preview || !jobId) && (
+              <EvidencePreview
+                evidenceId={selected.evidence_id}
+                originalName={preview?.original_name}
+                sha256={preview?.sha256}
+                registeredSizeBytes={preview?.size_bytes}
+              />
             )}
-          </pre>
-        </details>
-      ) : null}
-
-      <div className="flex items-start gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] leading-4 text-slate-600">
-        <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        人工复核、整改与报告归档请前往核验中心与整改中心处理。
+            <div className="gis-review-inspector">
+              <CaptureResults capture={selected} result={result} />
+              {detailLoading && <OperationStatus>正在读取核验结果</OperationStatus>}
+              {mutation === "review" && <OperationStatus detail="正在写入报告和证据包。">正在保存复核并封存</OperationStatus>}
+              {detailError && <Notice type="warning" message={detailError} />}
+              {job && (
+                <div className="gis-actions gis-capture-actions">
+                  <Link className="fm-button" to={`/backend-workflow?job=${encodeURIComponent(job.id)}`}>
+                    打开核验中心 <ArrowUpRight size={13} aria-hidden="true" />
+                  </Link>
+                  {job.status === "needs_review" && (
+                    <button type="button" className="fm-button fm-button-primary" onClick={() => void approve()} disabled={Boolean(mutation) || detailLoading || Boolean(detailError)}>
+                      {mutation === "review" ? "提交中…" : "批准核验"}
+                    </button>
+                  )}
+                </div>
+              )}
+              {reviewError?.captureId === selected.id && <Notice type="warning" message={reviewError.message} />}
+            </div>
+          </div>
+        )}
       </div>
-
-      {detail && detail.job.status === "needs_review" ? (
-        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2">
-          <p className="text-[11px] leading-4 text-slate-600">
-            该采集任务等待人工复核；批准后案件才能进入整改闭环。请复核员确认现场资料与规则初判。
-          </p>
-          <button
-            type="button"
-            disabled={reviewing}
-            onClick={() => void approveCapture()}
-            className="mt-1.5 w-full rounded-xl bg-sky-600 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
-          >
-            {reviewing ? "提交复核中…" : "批准本次采集（复核员）"}
-          </button>
-          {reviewError ? <p className="mt-1 text-[10px] text-rose-600">{reviewError}</p> : null}
-        </div>
-      ) : null}
     </div>
   );
-};
+}
+
+function CaptureResults({ capture, result }: { capture: EvidenceCapture; result: CaptureResult | null }) {
+  const { detail, compliance } = result ?? {};
+  const job = detail?.job;
+  const observations = job?.result?.observations;
+  const raw = observations && typeof observations === "object" ? observations as Record<string, unknown> : null;
+  const measurements = raw?.measurements;
+  const structured = useMemo(
+    () => structureObservations(measurements && typeof measurements === "object" ? measurements as Record<string, unknown> : raw),
+    [measurements, raw],
+  );
+  const differences = useMemo(() => groupDifferenceRows(compliance?.differences), [compliance?.differences]);
+  return (
+    <section className="fm-panel gis-capture-results">
+      <div className="gis-section-head"><h3>核验详情</h3></div>
+      <div className="gis-capture-result-grid">
+        <div>
+          <h4>空间核验</h4>
+          <span className="gis-status" data-status={capture.spatial_check_status === "passed" ? "approved" : capture.spatial_check_status === "failed" ? "deviation" : "needs_review"}>
+            {labelSpatialStatus(capture.spatial_check_status)}
+          </span>
+          <p>{spatialBusinessSummary(capture)}</p>
+          <dl className="gis-data">
+            <div><dt>目标距离</dt><dd>{meters(capture.distance_to_target_m)}</dd></div>
+            <div><dt>空间容差</dt><dd>{meters(capture.tolerance_m)}</dd></div>
+            <div><dt>定位精度</dt><dd>{meters(capture.accuracy_m)}</dd></div>
+            <div><dt>精度阈值</dt><dd>{meters(capture.gps_accuracy_threshold_m)}</dd></div>
+            <div><dt>采集时间</dt><dd>{formatWorkbenchTime(capture.client_captured_at)}</dd></div>
+          </dl>
+        </div>
+        <div>
+          <h4>规则核验</h4>
+          <dl className="gis-data">
+            <div><dt>处理进度</dt><dd>{job ? labelTaskProgress(job.status) : capture.verification_job_id ? "等待结果" : "等待任务"}</dd></div>
+            <div><dt>规则初判</dt><dd>{compliance ? labelRuleVerdict(compliance.verdict) : "—"}</dd></div>
+            <div><dt>人工复核</dt><dd>{job ? labelHumanReviewStatus(job.status) : "—"}</dd></div>
+          </dl>
+          {differences.bad.length > 0 && <p>偏差项 · {differences.bad.join("、")}</p>}
+          {differences.pending.length > 0 && <p>待确认 · {differences.pending.join("、")}</p>}
+          {differences.ok.length > 0 && <p>符合项 · {differences.ok.join("、")}</p>}
+          {job?.status === "failed" && <p className="gis-record-error">核验未完成，可在核验中心查看处理记录。</p>}
+        </div>
+      </div>
+      {(job || compliance) && (
+        <div className="gis-capture-observations">
+          <h4>现场观察</h4>
+          {job?.analyzer_name === "demo_fixture" && <span className="fm-label">来源 · 规则辅助</span>}
+          {structured.known.length ? (
+            <dl className="gis-data">
+              {structured.known.map((item) => <div key={item.key}><dt>{item.label}</dt><dd>{item.displayValue}</dd></div>)}
+            </dl>
+          ) : <p>暂无观察条目</p>}
+          <details className="gis-disclosure">
+            <summary>原始记录与判定依据</summary>
+            <pre>{JSON.stringify({
+              location: capture.spatial_check_reason,
+              observations: raw,
+              ruleVersion: compliance?.rule_version,
+              expected: compliance?.expected,
+              differences: compliance?.differences,
+              processingError: job?.error,
+            }, null, 2)}</pre>
+          </details>
+        </div>
+      )}
+    </section>
+  );
+}

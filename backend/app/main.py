@@ -14,6 +14,7 @@ from .services.analysis import recover_pending_verification_jobs, run_verificati
 from .services.remediation import scan_remediation_integrity
 from .services.sealing import recover_seal_operations
 from .services.storage import FileStorage
+from .services.work_orders import reconcile_sealed_work_orders
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -31,6 +32,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         integrity_db = database.session_factory()
         try:
             integrity_issues.extend(scan_remediation_integrity(integrity_db, storage))
+            if not integrity_issues:
+                reconcile_sealed_work_orders(integrity_db)
+                integrity_db.commit()
         finally:
             integrity_db.close()
         app_instance.state.sealing_integrity_issues = integrity_issues
@@ -51,7 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             database.engine.dispose()
 
     app = FastAPI(
-        title="烽眸智鉴后端 API",
+        title="锋眸智鉴后端 API",
         version=__version__,
         description=(
             "施工证据上传、设计基线对齐、人工复核、结构化报告与可验证哈希证据包。"

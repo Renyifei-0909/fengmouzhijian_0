@@ -9,14 +9,18 @@ from sqlalchemy.orm import Session
 from ..models import (
     DesignBaseline,
     EvidenceAsset,
+    EvidenceCapture,
+    EngineeringObject,
     FindingCase,
     HumanReview,
     Project,
     SensorEvent,
     VerificationJob,
+    WorkOrder,
 )
 from .analyzers.contracts import delivery_classification
 from .remediation import remediation_context_for_job
+from .report_presentation import build_readable_report, render_readable_html
 
 
 def _iso_utc(value: datetime) -> str:
@@ -122,6 +126,15 @@ def render_final_report(
     ).all()
     evidence_grade = bool((job.result_json or {}).get("evidence_grade", False))
     report_status, _ = delivery_classification(job.result_json)
+    remediation = remediation_context_for_job(db, job)
+    capture_job_id = remediation["case"]["source_job_id"] if remediation else job.id
+    capture = db.scalar(select(EvidenceCapture).where(
+        EvidenceCapture.verification_job_id == capture_job_id,
+        EvidenceCapture.project_id == job.project_id,
+    ))
+    order = db.get(WorkOrder, capture.work_order_id) if capture else None
+    linked_order = order if order and order.baseline_id == job.baseline_id else None
+    engineering_object = db.get(EngineeringObject, linked_order.engineering_object_id) if linked_order else None
     content = {
         "schema_version": "1.0",
         "report_id": report_id,
@@ -151,6 +164,7 @@ def render_final_report(
             "sha256": evidence.sha256,
             "captured_at": _iso_utc(evidence.captured_at) if evidence.captured_at else None,
             "device_id": evidence.device_id,
+            "scene_reference": (evidence.metadata_json or {}).get("scene_reference") is True,
         },
         "analysis": job.result_json,
         "human_review": {
@@ -162,9 +176,18 @@ def render_final_report(
         },
         "related_sensor_events": [_sensor_payload(item) for item in sensors],
         "finding_cases": [_finding_case_payload(item) for item in finding_cases],
-        "remediation_context": remediation_context_for_job(db, job),
+        "remediation_context": remediation,
         "truth_boundary": _report_truth_boundary(job.result_json),
     }
+    if linked_order:
+        content["work_order"] = {
+            "id": linked_order.id,
+            "code": linked_order.work_order_code,
+            "object_name": engineering_object.name if engineering_object else None,
+        }
+    if capture and linked_order and capture.evidence_id == evidence.id:
+        content["capture"] = {"spatial_check_status": capture.spatial_check_status}
+    content["readable"] = build_readable_report(content)
 
     json_bytes, html_bytes = render_report_bytes(content, report_id=report_id)
     return content, report_status, json_bytes, html_bytes
@@ -174,7 +197,12 @@ def render_report_bytes(content: dict[str, object], *, report_id: str) -> tuple[
     """Render a previously frozen report snapshot into JSON and HTML bytes."""
 
     json_bytes = json.dumps(content, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
-    safe_json = html.escape(json.dumps(content, ensure_ascii=False, indent=2, sort_keys=True))
+    readable = content.get("readable")
+    if isinstance(readable, dict) and readable.get("version") == 1:
+        return json_bytes, render_readable_html(readable, report_id, content.get("created_at"))
+
+    # Previously frozen seal operations must reproduce their original bytes.
+    safe_json = html.escape(json_bytes.decode("utf-8"))
     html_bytes = (
         "<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
