@@ -2,7 +2,7 @@ import { projectDisplayName } from "../lib/productCopy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
-import { ArrowLeft, ArrowUpRight, ChevronRight, ClipboardList, Download, FileCheck2, FileUp, Plus, RefreshCw, Search, Settings2 } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Check, ChevronRight, ClipboardList, Download, FileCheck2, FileUp, Plus, RefreshCw, Search, Settings2 } from "lucide-react";
 import { Modal } from "../components/ui/Modal";
 import { FieldScene } from "../components/ui/FieldScene";
 import { OperationStatus } from "../components/ui/OperationStatus";
@@ -48,7 +48,7 @@ type RemediationContext = {
 const analyzerLabel: Record<string, string> = {
   stub: "人工核验",
   remote_http: "辅助识别",
-  demo_fixture: "规则辅助",
+  demo_fixture: "规则辅助（演示）",
 };
 
 const alertLabels: Record<VerificationOperationsSnapshot["alerts"][number]["code"], string> = {
@@ -473,7 +473,8 @@ function JobWorkbench({ jobId, project, meta, remediation, original, onJob }: {
   const reportOrder = objectValue(detail.report?.content.work_order);
   const workOrderId = textValue(reportOrder.id) || textValue(orderMetadata?.work_order_id);
   const workOrderCode = textValue(reportOrder.code) || textValue(orderMetadata?.work_order_code);
-  const provenance = trial ? "规则辅助" : analyzerLabel[textValue(analysis.analysis_mode) || job.analyzer_name] || "其他来源";
+  const analysisMode = textValue(analysis.analysis_mode) || job.analyzer_name;
+  const provenance = trial && analysisMode !== "demo_fixture" ? "规则辅助" : analyzerLabel[analysisMode] || "其他来源";
   const analysisStatus = jobStatus[job.status];
   const { report, proof, recovery, remediation_attempt: attempt } = detail;
   const packageCheck = integrity?.proofId === proof?.id ? integrity?.result : null;
@@ -482,6 +483,8 @@ function JobWorkbench({ jobId, project, meta, remediation, original, onJob }: {
   const canResume = recovery.action === "resume_sealing" && recovery.retryable
     && (!attempt || attempt.resolution_decision === "resolved" || attempt.resolution_decision === "not_resolved");
   const finished = job.status === "approved" && Boolean(proof);
+  const awaitingAnalysis = (job.status === "queued" || job.status === "running") && !refreshError;
+  const automated = job.analyzer_name !== "stub";
 
   return <article className="fm-panel fm-wf-detail">
     <header className="fm-wf-detail-head">
@@ -503,6 +506,20 @@ function JobWorkbench({ jobId, project, meta, remediation, original, onJob }: {
         <span>{index + 1}</span>{step}{index < 3 ? <ChevronRight size={13} aria-hidden="true" /> : null}
       </li>)}
     </ol>
+    {(awaitingAnalysis || needsReview) && <div className="fm-wf-task-status" data-ready={needsReview}>
+      <div className="fm-wf-task-status-copy" role="status">
+        {needsReview ? <Check size={17} aria-hidden="true" /> : <span className="fm-operation-orbit" aria-hidden="true" />}
+        <span><strong>{needsReview ? automated ? "核验结果已就绪" : "复核资料已就绪"
+          : job.status === "queued" ? "影像已登记，正在排队"
+          : automated ? "正在后台分析影像" : "正在整理复核资料"}</strong>
+        <small>{needsReview ? "可对照现场原件和核验摘要，填写复核意见。"
+          : job.status === "queued" ? "后台领取任务后开始处理。"
+          : "处理完成后，本页会自动显示结果。"}</small></span>
+      </div>
+      {awaitingAnalysis && job.status === "running" && <div className="fm-wf-progress">
+        <progress aria-label="后台处理进度" value={job.progress} max={100} /><strong>{job.progress}%</strong>
+      </div>}
+    </div>}
     {(busy === "approve" || busy === "seal" || (job.status === "sealing" && !canResume)) &&
       <OperationStatus detail="正在生成报告、校验文件并写入交付档案。">正在封存复核记录</OperationStatus>}
     {refreshError ? <p className="fm-wf-message" data-tone="amber" role="status">{refreshError}</p> : null}
@@ -530,9 +547,6 @@ function JobWorkbench({ jobId, project, meta, remediation, original, onJob }: {
           {differences.pending.length ? <p className="fm-wf-observation" data-tone="amber">待核对 · {differences.pending.join("、")}</p> : null}
           {differences.ok.length ? <p className="fm-wf-observation" data-tone="green">已核对 · {differences.ok.join("、")}</p> : null}
           {observations.length ? <WorkbenchMeta entries={observations.map((item) => [item.label, item.displayValue])} /> : null}
-          {polling && job.status !== "sealing" ? <div className="fm-wf-progress">
-            <span>处理进度</span><progress aria-label="处理进度" value={job.progress} max={100} /><strong>{job.progress}%</strong>
-          </div> : null}
         </section>
 
         {needsReview ? <section className="fm-wf-subsection">
@@ -628,6 +642,7 @@ function VerificationUpload({ projects, initialProjectId, meta, locked, allowTri
   const [baselines, setBaselines] = useState<Baseline[]>(locked ? [locked.baseline] : []);
   const [baselineId, setBaselineId] = useState(locked?.baseline.id ?? "");
   const [file, setFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<{ file: File; url: string } | null>(null);
   const [analyzer, setAnalyzer] = useState<AnalyzerName | "">("");
   const [trialProject, setTrialProject] = useState<Project | null>(null);
   const [baselineLoading, setBaselineLoading] = useState(false);
@@ -643,6 +658,13 @@ function VerificationUpload({ projects, initialProjectId, meta, locked, allowTri
     active.current = true;
     return () => { active.current = false; };
   }, []);
+
+  useEffect(() => {
+    if (!file?.type.startsWith("image/")) return;
+    const url = URL.createObjectURL(file);
+    setImagePreview({ file, url });
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
 
   useEffect(() => {
     if (!projectId || locked) return;
@@ -737,7 +759,7 @@ function VerificationUpload({ projects, initialProjectId, meta, locked, allowTri
 
   return <Modal open onClose={() => { if (!busyRef.current) onClose(); }} size="md" placement="right"
     title={locked ? "提交复验资料" : "提交核验资料"}>
-    <form className="fm-wf-form" onSubmit={submit} aria-busy={Boolean(busy)}>
+    <form className="fm-wf-form" onSubmit={submit}>
       {locked ? <WorkbenchMeta entries={[["所属项目", projectDisplayName(locked.project.name)], ["设计基线", `${locked.baseline.site_id} · ${locked.baseline.version}`],
         ["整改记录", `第 ${locked.attempt.attempt_no} 次`]]} /> : <>
         <label className="fm-wf-field">所属项目
@@ -750,18 +772,24 @@ function VerificationUpload({ projects, initialProjectId, meta, locked, allowTri
         <label className="fm-wf-field">设计基线
           <select required className="fm-input" value={baselineId} disabled={!projectId || baselineLoading || Boolean(busy)}
             onChange={(event) => setBaselineId(event.target.value)}>
-            <option value="">{baselineLoading ? "正在读取基线" : projectId && !baselines.length ? "暂无可选基线" : "选择工点与版本"}</option>
+            <option value="" disabled>{baselineLoading ? "正在读取基线" : projectId && !baselines.length ? "暂无可选基线" : "选择工点与版本"}</option>
             {baselines.map((item) => <option key={item.id} value={item.id}>{item.site_id} · {item.version}</option>)}
           </select>
         </label>
         {baselineError ? <p className="fm-wf-message" data-tone="amber" role="status">{baselineError} <button type="button" className="fm-wf-link"
           onClick={() => setRevision((value) => value + 1)}>重试</button></p> : null}
       </>}
-      <label className="fm-wf-upload">
-        <FileUp size={24} strokeWidth={1.5} />
-        <span><strong>{file ? file.name : "选择现场照片或视频"}</strong><small>{file
-          ? `${(file.size / 1024 / 1024).toFixed(2)} MB · 点击更换文件` : "照片或视频原件"}</small></span>
+      <label className="fm-wf-upload" data-selected={Boolean(file)}>
+        {imagePreview && imagePreview.file === file
+          ? <img key={imagePreview.url} className="fm-wf-upload-preview" src={imagePreview.url} alt="" />
+          : <span className="fm-wf-upload-icon"><FileUp size={23} strokeWidth={1.6} aria-hidden="true" /></span>}
+        <span className="fm-wf-upload-copy">
+          {file && <span className="fm-wf-upload-selected"><Check size={12} aria-hidden="true" />已选文件</span>}
+          <strong title={file?.name}>{file?.name ?? "选择现场照片或视频"}</strong>
+          <small>{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB · 点击更换` : "选中后可预览照片并核对文件名"}</small>
+        </span>
         <input required type="file" accept="image/jpeg,image/png,video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm,.mov,.avi,.mkv"
+          aria-label={file ? "更换现场照片或视频" : "选择现场照片或视频"}
           disabled={Boolean(busy)} onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
       </label>
       <label className="fm-wf-field">处理方式
@@ -776,7 +804,7 @@ function VerificationUpload({ projects, initialProjectId, meta, locked, allowTri
         <button type="button" className="fm-button" disabled={Boolean(busy)} onClick={createTrialBaseline}>{busy === "trial" ? "正在准备…" : "准备独立设计基线"}</button>
       </details> : null}
       {error ? <p className="fm-wf-message" data-tone="red" role="alert">{error}</p> : null}
-      {busy === "upload" && <OperationStatus detail="资料登记后会进入核验队列。">正在上传影像</OperationStatus>}
+      {busy === "upload" && <OperationStatus detail="服务端确认收到资料后，会打开本次核验任务。">正在上传影像</OperationStatus>}
       <div className="fm-wf-actions fm-wf-form-actions">
         <button type="button" className="fm-button" disabled={Boolean(busy)} onClick={onClose}>取消</button>
         <button type="submit" className="fm-button fm-button-primary" disabled={Boolean(busy || !file || !selectedBaseline || !selectedAnalyzer)}>

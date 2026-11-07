@@ -59,7 +59,7 @@ export function DashboardPage() {
       <section className="fm-overview-hero" aria-labelledby="overview-heading">
         <div className="fm-overview-hero-content">
           <p className="fm-overview-kicker"><span aria-hidden="true" /> 施工监管工作台</p>
-          <h2 id="overview-heading">从工程现场到交付档案</h2>
+          <h2 id="overview-heading">凌云烽眸巡山海</h2>
           <p className="fm-overview-subtitle">定位工程对象，处理核验与整改，查阅交付记录。</p>
           <div className="fm-overview-actions">
             <Link to="/gis-map" className="fm-button fm-button-primary"><MapIcon className="size-4" /> 进入工程作业</Link>
