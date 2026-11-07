@@ -77,6 +77,15 @@ export const OBJECT_TYPE_LABEL: Record<string, string> = {
   pipe_route: "管线路由",
   trench: "沟槽",
   infrastructure_point: "设施点",
+  telecom_duct: "通信管道段",
+  backbone_fiber: "主干光缆段",
+  access_fiber: "接入光缆段",
+  fiber_cross_connect_cabinet: "光缆交接箱",
+  fiber_distribution_box: "光缆分纤箱",
+  telecom_manhole: "通信人孔",
+  telecom_handhole: "通信手孔",
+  access_room: "通信接入机房",
+  macro_base_station: "宏基站",
 };
 
 export const IMPORT_STATUS_LABEL: Record<string, string> = {

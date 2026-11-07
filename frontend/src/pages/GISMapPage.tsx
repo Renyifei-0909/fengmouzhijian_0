@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { FileUp, Layers, ListChecks, MapPin, Plus, RefreshCw, Search, X } from "lucide-react";
@@ -22,6 +22,7 @@ import {
   engineeringObjectDisplayName,
 } from "../lib/productCopy";
 import { formatWorkbenchTime } from "../components/gis/workbenchTime";
+import { BINJIANG_DEMO_PACKAGE_ID, createBinjiangDemoObjects } from "../components/gis/binjiangDemoObjects";
 import { serviceTimestamp } from "../lib/serviceTime";
 import "../components/gis/workbench.css";
 
@@ -72,7 +73,9 @@ export function GISMapPage() {
 
   const currentResource = resource?.id === projectId ? resource : null;
   const data = currentResource?.data;
-  const objects = data?.summary.objects ?? EMPTY_OBJECTS;
+  const importedObjects = data?.summary.objects ?? EMPTY_OBJECTS;
+  const demoObjects = useMemo(() => projectId ? createBinjiangDemoObjects(projectId) : EMPTY_OBJECTS, [projectId]);
+  const objects = useMemo(() => [...importedObjects, ...demoObjects], [importedObjects, demoObjects]);
   const workOrders = data?.summary.work_orders ?? EMPTY_ORDERS;
   const selectedProject = projects?.find((project) => project.id === projectId);
   const selectedWorkOrder = workOrders.find((order) => order.id === orderId);
@@ -346,7 +349,7 @@ export function GISMapPage() {
         <aside className="gis-object-rail" aria-label="工程对象">
           <div className="gis-section-head">
             <h3><Layers size={15} aria-hidden="true" /> 工程对象</h3>
-            <span>{data?.summary.engineering_object_count ?? "—"}</span>
+            <span>{data ? objects.length : "—"}</span>
           </div>
           <label className="gis-search">
             <Search size={14} aria-hidden="true" />
@@ -422,9 +425,16 @@ export function GISMapPage() {
                 <span className="fm-label">外部设计图层</span>
                 <h4>{selectedReference.objectCode}</h4>
                 <dl className="gis-data">
+                  <div><dt>对象标识</dt><dd>{selectedReference.id}</dd></div>
                   <div><dt>类型</dt><dd>{selectedReference.objectType}</dd></div>
+                  <div><dt>设计版本</dt><dd>{selectedReference.designVersion}</dd></div>
                   <div><dt>来源图层</dt><dd>{selectedReference.sourceLayer}</dd></div>
+                  <div><dt>图形序号</dt><dd>第 {selectedReference.featureIndex} 个要素</dd></div>
+                  <div><dt>几何类型</dt><dd>{selectedReference.geometryType}</dd></div>
+                  <div><dt>显示坐标系</dt><dd>WGS 84 · EPSG:4326</dd></div>
+                  <div><dt>数据来源</dt><dd>Dreieich Mitte QGIS 工程</dd></div>
                   <div><dt>来源工程</dt><dd>德赖艾希中心区</dd></div>
+                  <div><dt>关联状态</dt><dd>已关联地图要素</dd></div>
                 </dl>
               </>
             ) : selectedObject ? (
@@ -434,6 +444,7 @@ export function GISMapPage() {
                 <dl className="gis-data">
                   <div><dt>对象编号</dt><dd>{selectedObject.object_code}</dd></div>
                   <div><dt>设计版本</dt><dd>{selectedObject.design_version}</dd></div>
+                  {selectedObject.design_package_id === BINJIANG_DEMO_PACKAGE_ID && <div><dt>数据性质</dt><dd>内置滨江示范对象</dd></div>}
                 </dl>
                 <details className="gis-disclosure">
                   <summary>对象属性与设计要求</summary>
@@ -447,9 +458,13 @@ export function GISMapPage() {
                   <p>{COPY.designRequirements}</p>
                   <pre>{JSON.stringify(selectedObject.expected_rules, null, 2)}</pre>
                 </details>
-                <button type="button" className="fm-button fm-button-primary gis-inspector-cta" onClick={() => openDialog("create")}>
-                  <Plus size={15} aria-hidden="true" /> 新建工单
-                </button>
+                {selectedObject.design_package_id === BINJIANG_DEMO_PACKAGE_ID ? (
+                  <p className="gis-import-feedback">内置示范对象仅用于地图浏览；导入正式工程数据后可创建施工工单。</p>
+                ) : (
+                  <button type="button" className="fm-button fm-button-primary gis-inspector-cta" onClick={() => openDialog("create")}>
+                    <Plus size={15} aria-hidden="true" /> 新建工单
+                  </button>
+                )}
               </>
             ) : (
               <FieldScene scene="survey" guidance="在地图或左侧清单选中工程对象，查看工单和采集记录。" />
