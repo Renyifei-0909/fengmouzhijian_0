@@ -44,6 +44,7 @@ export type CaptureMarker = {
   longitude: number;
   latitude: number;
   synthetic?: boolean;
+  comparison?: { distance: number; tolerance: number };
 };
 
 export type QgisDesignObject = {
@@ -188,11 +189,14 @@ function getReferenceObject(feature: MapGeoJSONFeature): QgisDesignObject | null
   };
 }
 
-function fit(map: LibreMap, points: LonLat[], duration = 350) {
+function fit(map: LibreMap, points: LonLat[], duration = 350, maxZoom = 17) {
   const bounds = boundsFromPoints(points, 0.035);
   if (!bounds) return;
   const padding = Math.min(54, Math.floor(map.getContainer().clientWidth / 7));
-  map.fitBounds([[bounds.minLon, bounds.minLat], [bounds.maxLon, bounds.maxLat]], { padding, maxZoom: 17, duration });
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  map.fitBounds([[bounds.minLon, bounds.minLat], [bounds.maxLon, bounds.maxLat]], {
+    padding, maxZoom, duration: reducedMotion ? 0 : duration,
+  });
 }
 
 function tooltip(title: string, caption: string) {
@@ -227,6 +231,7 @@ export function GeoMap({
   const [styleError, setStyleError] = useState(false);
   const [inRegion, setInRegion] = useState(true);
   const [regional, setRegional] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [regionalReady, setRegionalReady] = useState(false);
   const [regionalError, setRegionalError] = useState(false);
   const [rasterState, setRasterState] = useState<"loading" | "loaded" | "unavailable">("loading");
   const [basemapRevision, setBasemapRevision] = useState(0);
@@ -243,10 +248,8 @@ export function GeoMap({
   const appliedBasemapRevision = useRef(0);
   const features = useMemo(() => toFeatureCollection(objects), [objects]);
   const allPoints = useMemo(() => objects.flatMap((object) => collectLonLats(object.geometry_wgs84)), [objects]);
-  const focusPoints = useMemo(
-    () => collectLonLats(objects.find((object) => object.id === selectedObjectId)?.geometry_wgs84),
-    [objects, selectedObjectId],
-  );
+  const focusObject = objects.find((object) => object.id === selectedObjectId);
+  const focusPoints = useMemo(() => collectLonLats(focusObject?.geometry_wgs84), [focusObject]);
   const referencePoints = useMemo(() => (referenceData ?? []).flatMap(({ collection }) =>
     collection.features.flatMap((feature) => collectLonLats(feature.geometry as GeoJsonGeometry))),
   [referenceData]);
@@ -445,6 +448,14 @@ export function GeoMap({
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!showRegion || !regional || !map || !styleVersion) return;
+    const ready = () => setRegionalReady(true);
+    map.once("idle", ready);
+    return () => { map.off("idle", ready); };
+  }, [regional, showRegion, styleVersion]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map?.getLayer(FILL)) return;
     if (selectedQgisObjectId) {
       lastFitKey.current = null;
@@ -457,6 +468,19 @@ export function GeoMap({
     lastFitKey.current = key;
     if (key) fit(map, focusPoints.length ? focusPoints : usingReference ? referencePoints : allPoints);
   }, [allPoints, features, focusPoints, referencePoints, selectedObjectId, selectedQgisObjectId, showReference, styleVersion]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const point = focusPoints[Math.floor((focusPoints.length - 1) / 2)];
+    if (!map || !focusObject || !point || selectedQgisObjectId) return;
+    const tag = document.createElement("span");
+    tag.className = "gis-object-map-tag";
+    tag.textContent = focusObject.object_code;
+    tag.setAttribute("aria-hidden", "true");
+    const marker = new maplibregl.Marker({ element: tag, anchor: "bottom-left", offset: [15, -15] })
+      .setLngLat([point.lon, point.lat]).addTo(map);
+    return () => { marker.remove(); };
+  }, [focusObject, focusPoints, selectedQgisObjectId]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -474,7 +498,7 @@ export function GeoMap({
     };
   }, [captureMarker]);
 
-  const locate = (points: LonLat[]) => { if (mapRef.current) fit(mapRef.current, points); };
+  const locate = (points: LonLat[], maxZoom?: number) => { if (mapRef.current) fit(mapRef.current, points, 350, maxZoom); };
   const chooseBasemap = (mode: Basemap) => { setBasemap(mode); setStyleError(false); };
   const retryBasemap = () => {
     setRegionalError(false);
@@ -483,7 +507,7 @@ export function GeoMap({
   };
 
   return (
-    <div className={`gis-map-surface ${className}`}>
+    <div className={`gis-map-surface ${className}`} data-regional-ready={regionalReady}>
       <div ref={containerRef} className="gis-map-canvas" />
       {unavailable ? (
         <EngineeringSketch objects={objects} selectedObjectId={selectedObjectId} captureMarker={captureMarker} onSelectObject={onSelectObject} />
@@ -515,18 +539,23 @@ export function GeoMap({
             <button type="button" title="定位全部工程对象" onClick={() => locate(allPoints.length ? allPoints : referencePoints)} disabled={!allPoints.length && !(showReference && referencePoints.length)}>
               <Crosshair size={15} aria-hidden="true" /> 全图
             </button>
-            {captureMarker && <button type="button" title="定位采集点" onClick={() => locate([{ lon: captureMarker.longitude, lat: captureMarker.latitude }])}>
-              <LocateFixed size={15} aria-hidden="true" /> 采集点
+            {captureMarker && <button type="button" title="同时查看工程对象和采集点" onClick={() => locate([
+              ...focusPoints, { lon: captureMarker.longitude, lat: captureMarker.latitude },
+            ], 16.6)}>
+              <LocateFixed size={15} aria-hidden="true" /> 定位对照
             </button>}
           </div>
           {osmVisible && <div className="gis-attribution">
             {!collapseCredit && <a className="gis-attribution-credit" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a>}
             <details>
               <summary aria-label="地图来源" title="地图来源"><Info size={14} aria-hidden="true" /></summary>
-              <div><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a><span> · ODbL</span></div>
+              <div><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a><span> · ODbL</span>
+                {showRegion && regional && <span> · <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a>
+                  {" / "}<a href="https://www.openmaptiles.org/" target="_blank" rel="noreferrer">© OpenMapTiles</a></span>}
+              </div>
             </details>
           </div>}
-          {showRegion && !regional && <div className="gis-map-message fm-operation-inline" role="status">正在读取区域底图…</div>}
+          {showRegion && !regionalReady && <div className="gis-map-message fm-operation-inline" role="status">正在绘制区域底图…</div>}
           {styleError && <div className="gis-map-message" role="status">项目底图暂不可用，已切换街道底图</div>}
           {!styleError && showRaster && rasterState === "unavailable" && <div className="gis-map-message" role="status">街道底图暂不可用，工程图层可继续查看</div>}
         </>

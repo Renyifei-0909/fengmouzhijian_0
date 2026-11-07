@@ -1,12 +1,12 @@
 /**
- * Product-facing copy and status labels for 锋眸智鉴.
+ * Product-facing copy and status labels for 烽眸智鉴.
  * API enums remain English; only display strings are mapped here.
  */
 
 export const PRODUCT = {
-  name: "锋眸智鉴",
+  name: "烽眸智鉴",
   subtitle: "通信工程监管与交付",
-  defaultPageTitle: "锋眸智鉴",
+  defaultPageTitle: "烽眸智鉴",
 } as const;
 
 export function archiveTitle(ledgerIndex: number) {
@@ -15,7 +15,7 @@ export function archiveTitle(ledgerIndex: number) {
 
 export function projectDisplayName(name: string) {
   if (/^(烽|锋)眸智鉴 · 合成整改闭环演示$/.test(name)) return `${PRODUCT.name} · 整改流程资料`;
-  return name.replace("烽眸智鉴", PRODUCT.name).replace(/[（(](?:本地样例|测试样例)[）)]$/, "").trim();
+  return name.replace(/锋眸智鉴/g, PRODUCT.name).replace(/[（(](?:本地样例|测试样例)[）)]$/, "").trim();
 }
 
 export function engineeringObjectDisplayName(name: string): string {

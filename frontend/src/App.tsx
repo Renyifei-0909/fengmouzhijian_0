@@ -149,7 +149,7 @@ const AppShell: React.FC = () => {
 
   const meta = getPageMeta();
   useEffect(() => {
-    document.title = `${meta.title} · ${PRODUCT.name}`;
+    document.title = meta.title === PRODUCT.name ? PRODUCT.name : `${meta.title} · ${PRODUCT.name}`;
   }, [meta.title]);
   const shellWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth;
 

@@ -69,7 +69,9 @@ export function WorkbenchEvidence({ evidence, title = "现场原件" }: {
   title?: string;
 }) {
   const reference = evidence.metadata.scene_reference === true;
-  const heading = reference && title === "现场原件" ? "原始影像" : title;
+  const heading = title === "现场原件"
+    ? evidence.metadata.media_origin === "field_photo_redacted" ? "现场影像" : reference ? "原始影像" : title
+    : title;
   return <section className="fm-wf-evidence" aria-label={heading}>
     <h3 className="fm-wf-media-heading"><Image size={15} aria-hidden="true" />{heading}</h3>
     <EvidencePreview

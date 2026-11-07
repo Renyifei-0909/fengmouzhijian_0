@@ -198,7 +198,7 @@ def render_report_bytes(content: dict[str, object], *, report_id: str) -> tuple[
 
     json_bytes = json.dumps(content, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
     readable = content.get("readable")
-    if isinstance(readable, dict) and readable.get("version") == 1:
+    if isinstance(readable, dict) and readable.get("version") in (1, 2):
         return json_bytes, render_readable_html(readable, report_id, content.get("created_at"))
 
     # Previously frozen seal operations must reproduce their original bytes.

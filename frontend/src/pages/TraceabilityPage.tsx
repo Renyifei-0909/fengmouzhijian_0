@@ -53,6 +53,7 @@ export function TraceabilityPage() {
   const [params, setParams] = useSearchParams();
   const fingerprint = params.get("fingerprint")?.trim() ?? "";
   const archive = params.get("archive")?.trim() ?? "";
+  const reportId = params.get("report")?.trim() ?? "";
   const [keyword, setKeyword] = useState(fingerprint);
   const [loaded, setLoaded] = useState<{ fingerprint: string; proofs: Proof[] } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,7 +83,8 @@ export function TraceabilityPage() {
   useEffect(() => () => { requestRef.current += 1; }, []);
 
   const proofs = loaded?.fingerprint === fingerprint ? loaded.proofs : [];
-  const selected = archive ? proofs.find((item) => item.archive_id === archive || item.id === archive) : proofs[0];
+  const selected = archive ? proofs.find((item) => item.archive_id === archive || item.id === archive)
+    : reportId ? proofs.find((item) => item.report_id === reportId) : proofs[0];
   const current = selected?.id === inspection?.proofId ? inspection : null;
   const feedback = selected?.id === action?.proofId ? action : null;
   const integrity = current?.result;
@@ -108,6 +110,7 @@ export function TraceabilityPage() {
     requestRef.current += 1;
     setParams((currentParams) => {
       const next = new URLSearchParams(currentParams);
+      next.delete("report");
       next.set("archive", item.archive_id);
       return next;
     }, { replace: true });
@@ -130,7 +133,10 @@ export function TraceabilityPage() {
     if (!selected || downloadId) return;
     setAction(null);
     setDownloadId(selected.id);
-    try { await api.downloadArchive(selected.id); }
+    try {
+      await api.downloadArchive(selected.id);
+      setAction({ proofId: selected.id, notice: "已交给浏览器下载。解压 ZIP 后可打开 report/report.html 查看封存报告。" });
+    }
     catch (reason) { setAction({ proofId: selected.id, error: recordError(reason, "证据包下载失败。") }); }
     finally { setDownloadId(""); }
   }
@@ -186,8 +192,8 @@ export function TraceabilityPage() {
       <section className="fm-panel" aria-label="完整性核验">
         <div className="fm-record-section-head">
           <h2>完整性核验</h2>
-          {integrity ? <RecordStatus tone={integrity.valid ? "green" : "red"}>{integrity.valid ? "核验通过" : "核验未通过"}</RecordStatus>
-            : selected ? <RecordStatus tone={current?.running ? "blue" : "neutral"}>{current?.running ? "核验中" : "待核验"}</RecordStatus> : null}
+          <div role="status">{integrity ? <RecordStatus tone={integrity.valid ? "green" : "red"}>{integrity.valid ? "核验通过" : "核验未通过"}</RecordStatus>
+            : selected ? <RecordStatus tone={current?.running ? "blue" : "neutral"}>{current?.running ? "核验中" : "待核验"}</RecordStatus> : null}</div>
         </div>
         {selected ? <div className="fm-record-body" key={selected.id}>
           <div>
@@ -204,7 +210,7 @@ export function TraceabilityPage() {
               <ShieldCheck size={16} aria-hidden="true" />{current?.running ? "正在核验…" : integrity ? "重新核验" : "核验档案"}
             </button>
             <button type="button" className="fm-button" disabled={!!downloadId} onClick={() => void download()}>
-              <Download size={15} aria-hidden="true" />{downloadId === selected.id ? "下载中…" : "下载证据包"}
+              <Download size={15} aria-hidden="true" />{downloadId === selected.id ? "下载中…" : "下载证据包（ZIP）"}
             </button>
             <button type="button" className="fm-button" onClick={() => void copy()}><Copy size={14} aria-hidden="true" />复制摘要</button>
           </div>
@@ -237,7 +243,7 @@ export function TraceabilityPage() {
               ["前序指纹", <code>{selected.previous_record_hash}</code>],
             ]} />
           </details>
-        </div> : <RecordEmpty loading={loading}>{loading ? "正在读取档案…" : archive ? "未找到指定档案，请重新选择。" : "选择档案后核验完整性"}</RecordEmpty>}
+        </div> : <RecordEmpty loading={loading}>{loading ? "正在读取档案…" : archive ? "未找到指定档案，请重新选择。" : reportId ? "这份报告暂无关联档案。" : "选择档案后核验完整性"}</RecordEmpty>}
       </section>
     </div>
   </div>;

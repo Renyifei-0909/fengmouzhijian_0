@@ -143,7 +143,6 @@ export function GISMapPage() {
 
   useEffect(() => {
     if (projectId || !projects?.length) return;
-    const preferred = projects[0];
     let active = true;
     const resolve = async () => {
       let linkedProjectId: string | undefined;
@@ -153,11 +152,20 @@ export function GISMapPage() {
       } catch {
         // An unavailable link opens the default project.
       }
+      let target = projects.find((project) => project.id === linkedProjectId);
+      // An imagery-only project may be the newest project in the ledger.
+      for (let i = 0; !target && active && i < projects.length; i += 4) {
+        const candidates = projects.slice(i, i + 4);
+        const packages = await Promise.allSettled(candidates.map(({ id }) => api.listDesignPackages(id)));
+        target = candidates.find((_, index) => {
+          const result = packages[index];
+          return result.status === "fulfilled" && result.value.some((item) => item.object_count > 0);
+        });
+      }
       if (!active || current.current.projectId) return;
-      const target = projects.find((project) => project.id === linkedProjectId) ?? preferred;
       setSearchParams((previous) => {
         const next = new URLSearchParams(previous);
-        next.set("project", target.id);
+        next.set("project", (target ?? projects[0]).id);
         return next;
       }, { replace: true });
     };
@@ -373,7 +381,11 @@ export function GISMapPage() {
             ))}
             {!filteredObjects.length && (
               <li className="gis-empty">
-                {loading && !data && !projectsError ? "正在读取工程对象…" : query ? "未找到匹配对象" : "暂无工程对象"}
+                {loading && !data && !projectsError ? "正在读取工程对象…" : query ? (
+                  <>未找到匹配对象 <button type="button" className="gis-empty-action" onClick={() => setSearch("")}>清除搜索</button></>
+                ) : selectedProject ? (
+                  <>该项目尚无工程图层 <button type="button" className="gis-empty-action" onClick={() => openDialog("import")}>导入工程设计</button></>
+                ) : "暂无工程对象"}
               </li>
             )}
           </ul>
@@ -416,7 +428,7 @@ export function GISMapPage() {
               </button>
             )}
           </div>
-          <div className="gis-inspector-body">
+          <div className="gis-inspector-body" key={selectedReference?.id ?? selectedObject?.id ?? "project"}>
             {selectedReference ? (
               <>
                 <span className="fm-label">外部设计图层</span>
@@ -471,6 +483,14 @@ export function GISMapPage() {
                   </Link>
                   <button type="button" className="fm-button" onClick={() => openDialog("capture")}>采集与核验</button>
                 </div>
+                {marker?.orderId === selectedWorkOrder.id && (
+                  <div className="gis-position-hint">
+                    {marker.position.comparison ? <dl className="gis-data">
+                      <div><dt>{marker.position.synthetic ? "标注点距对象" : "采集点距对象"}</dt><dd>{marker.position.comparison.distance.toFixed(1)} 米</dd></div>
+                      <div><dt>工单容差</dt><dd>{marker.position.comparison.tolerance} 米</dd></div>
+                    </dl> : <p>点击「定位对照」，同时查看工程对象和采集点。</p>}
+                  </div>
+                )}
               </section>
             )}
           </div>
@@ -568,7 +588,9 @@ function ImportRecords({ packages }: { packages: DesignPackage[] }) {
             <span className="gis-history-status">{labelImportStatus(pkg.import_status)} · {pkg.object_count} 个对象</span>
           </summary>
           <dl className="gis-data">
-            <div><dt>来源文件</dt><dd>{pkg.source_filename}</dd></div>
+            {/^[a-f0-9]{32}\.gpkg$/i.test(pkg.source_filename)
+              ? <div><dt>文件格式</dt><dd>GeoPackage (.gpkg)</dd></div>
+              : <div><dt>来源文件</dt><dd>{pkg.source_filename}</dd></div>}
             <div><dt>坐标系统</dt><dd>EPSG:{pkg.source_crs_epsg}</dd></div>
             <div><dt>导入时间</dt><dd>{formatWorkbenchTime(pkg.imported_at)}</dd></div>
           </dl>

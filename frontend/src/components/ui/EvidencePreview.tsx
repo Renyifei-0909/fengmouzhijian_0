@@ -114,7 +114,7 @@ const EvidencePreviewSession: React.FC<EvidencePreviewProps> = ({
         </div>
         {content ? (
           <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-200">
-            <CheckIcon className="h-3.5 w-3.5" /> 原件已校验
+            <CheckIcon className="h-3.5 w-3.5" /> 文件已校验
           </span>
         ) : null}
       </div>

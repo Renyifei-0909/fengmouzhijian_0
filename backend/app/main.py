@@ -55,7 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             database.engine.dispose()
 
     app = FastAPI(
-        title="锋眸智鉴后端 API",
+        title="烽眸智鉴后端 API",
         version=__version__,
         description=(
             "施工证据上传、设计基线对齐、人工复核、结构化报告与可验证哈希证据包。"

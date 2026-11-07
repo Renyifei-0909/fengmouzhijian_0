@@ -336,7 +336,22 @@
 }
 .gis-region-label[data-rank="district"] { color: #e1edf1; font-size: 12px; letter-spacing: .045em; }
 .gis-region-label[data-rank="road"] { color: #bfbaaa; }
+.gis-region-label[data-rank="arterial"] { color: #c5c9ba; }
+.gis-region-label[data-rank="street"] { color: #aab9c0; font-weight: 500; }
 .gis-region-label[data-rank="water"] { color: #81b5d2; font-size: 12px; letter-spacing: .23em; }
+.gis-object-map-tag {
+  pointer-events: none;
+  z-index: 1;
+  padding: 4px 8px;
+  border: 1px solid #c58c48;
+  border-radius: 5px;
+  color: #ffe1b0;
+  background: #182536;
+  box-shadow: 0 2px 9px #050d16a6;
+  font-size: 12px;
+  font-weight: 720;
+  white-space: nowrap;
+}
 
 .gis-sketch svg { position: relative; display: block; width: 100%; height: 100%; padding: 36px 12px; }
 .gis-sketch path { cursor: pointer; }
@@ -385,6 +400,18 @@
   max-height: clamp(393px, calc(62vh - 45px), 605px);
   padding: 12px;
   overflow: auto;
+  animation: fm-gis-inspect 165ms ease-out;
+}
+@keyframes fm-gis-inspect { from { opacity: .55; translate: 0 4px; } to { opacity: 1; translate: 0 0; } }
+.gis-object-list .gis-empty-action {
+  display: inline;
+  margin-top: 6px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--fm-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .gis-inspector h4,
@@ -733,3 +760,4 @@
 .gis-attribution summary::-webkit-details-marker { display: none; }
 .gis-attribution details[open] > div { position: absolute; right: 0; bottom: 29px; width: max-content; padding: 7px 9px; border: 1px solid #405870; border-radius: 4px; background: #0b1b29; }
 .gis-attribution a:hover { color: white; text-decoration: underline; }
+.gis-position-hint { margin-top: 10px; color: var(--fm-muted); font-size: 12px; line-height: 1.5; }

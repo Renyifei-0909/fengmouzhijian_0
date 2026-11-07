@@ -522,7 +522,8 @@ function JobWorkbench({ jobId, project, meta, remediation, original, onJob }: {
             ["规则初判", ruleVerdict ? labelRuleVerdict(ruleVerdict) : "暂无规则判定"],
             ["人工复核", labelHumanReviewStatus(job.status)],
             ["关联工单", workOrderId ? <LinkedWorkOrder id={workOrderId} code={workOrderCode} revision={`${job.status}:${revision}`} /> : "未关联工单"],
-            ["资料来源", remediation ? "整改复验" : "资料提交"],
+            ["资料来源", detail.evidence.metadata.media_origin === "field_photo_redacted" ? "赛题现场影像（脱敏）"
+              : remediation ? "整改复验" : "资料提交"],
             ["处理方式", provenance],
           ]} />
           {differences.bad.length ? <p className="fm-wf-observation" data-tone="red">偏差 · {differences.bad.join("、")}</p> : null}

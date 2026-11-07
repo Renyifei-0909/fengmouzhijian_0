@@ -114,6 +114,18 @@ describe("工程作业项目与工单选择", () => {
     expect(screen.getByRole("link", { name: "工单详情" })).toHaveAttribute("href", "/work-orders/order-b");
   });
 
+  it("opens a mapped project when the latest project only has imagery", async () => {
+    vi.mocked(api.listDesignPackages).mockImplementation(async (id) => id === "project-b" ? [{
+      id: "design", project_id: id, object_count: 1,
+    } as Awaited<ReturnType<typeof api.listDesignPackages>>[number]] : []);
+    vi.spyOn(api, "projectGisSummary").mockResolvedValue(makeSummary("project-b", [other]));
+    open("");
+
+    await screen.findByRole("button", { name: /滨河区段/ });
+    expect(screen.getByRole("combobox", { name: "当前项目" })).toHaveValue("project-b");
+    expect(api.projectGisSummary).not.toHaveBeenCalledWith("project-a");
+  });
+
   it("ignores late data from the previous project and restores it on Back", async () => {
     let returnOld!: (summary: ProjectGisSummary) => void;
     const older = new Promise<ProjectGisSummary>((resolve) => { returnOld = resolve; });

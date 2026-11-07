@@ -623,15 +623,23 @@ async function download(path: string, filename: string): Promise<void> {
     const body = await response.json().catch(() => null);
     throw new Error(describeHttpError(response.status, body?.detail ?? null));
   }
-  const url = URL.createObjectURL(await response.blob());
+  const file = await response.blob();
+  if (filename.endsWith(".zip")) {
+    const signature = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+    if (file.type !== "application/zip" || signature[0] !== 0x50 || signature[1] !== 0x4b ||
+      signature[2] !== 0x03 || signature[3] !== 0x04) {
+      throw new Error("服务器返回的内容不是有效的证据包，请刷新后重试。");
+    }
+  }
+  const url = URL.createObjectURL(file);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  // Keep the object URL alive until the browser has consumed the synthetic click.
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  // Safari may begin reading the blob after the click callback has returned.
+  window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
 async function fetchEvidenceContent(
@@ -798,8 +806,9 @@ export const api = {
   fetchEvidenceContent,
   createEvidenceObjectUrl,
   downloadReport: (reportId: string, format: "json" | "html") =>
-    download(`/reports/${reportId}/download?format=${format}`, `report-${reportId}.${format}`),
-  downloadArchive: (proofId: string) => download(`/proofs/${proofId}/archive`, `evidence-${proofId}.zip`),
+    download(`/reports/${encodeURIComponent(reportId)}/download?format=${format}`, `烽眸智鉴-核验报告-${reportId}.${format}`),
+  downloadArchive: (proofId: string) =>
+    download(`/proofs/${encodeURIComponent(proofId)}/archive`, `烽眸智鉴-证据包-${proofId}.zip`),
 
   // Alpha18 work-order / GIS
   projectGisSummary: (projectId: string) =>

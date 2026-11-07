@@ -211,6 +211,9 @@ export function WorkOrderCapturePanel({ workOrder, onWorkOrderUpdated, onCapture
       longitude: lon,
       latitude: lat,
       synthetic: hasFormPosition ? locationSource === "synthetic_demo" : selected?.is_synthetic_location,
+      comparison: !hasFormPosition && selected?.distance_to_target_m != null && selected.tolerance_m != null
+        ? { distance: selected.distance_to_target_m, tolerance: selected.tolerance_m }
+        : undefined,
     } : null);
   }, [latitude, longitude, locationSource, markerSource, onCaptureMarkerChange, selected]);
 

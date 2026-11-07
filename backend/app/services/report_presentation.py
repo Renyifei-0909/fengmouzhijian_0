@@ -130,7 +130,7 @@ def build_readable_report(content: dict[str, Any]) -> dict[str, Any]:
     verdict = VERDICTS.get(compliance.get("verdict") or alignment.get("status"), "未形成规则判定")
     decision = {"approve": "已批准", "reject": "已退回"}.get(review.get("decision"), "待确认")
     mode = analysis.get("analysis_mode")
-    analysis_mode = {"stub": "人工核验", "remote_http": "辅助识别", "demo_fixture": "规则辅助"}.get(mode, "见核验记录")
+    analysis_mode = {"stub": "人工复核", "remote_http": "辅助识别", "demo_fixture": "演示规则"}.get(mode, "见核验记录")
     checks = []
     for item in alignment.get("differences") or ():
         row = _record(item)
@@ -147,25 +147,26 @@ def build_readable_report(content: dict[str, Any]) -> dict[str, Any]:
     if reviewer.startswith("api-key:") or reviewer in {"合成演示复核员", "合成整改复验员"}:
         reviewer = "复核员"
     sections = [
+        _section("复核意见", facts=[
+            ("处理结果", resolution or decision), ("复核人", reviewer), ("复核时间（北京时间）", _time(review.get("reviewed_at"))),
+        ], paragraphs=[_note(review.get("note"))]),
         _section("工程与设计依据", facts=[
             ("所属项目", project.get("name")), ("施工位置", project.get("location")),
             ("工单", work_order.get("code")), ("工程对象", work_order.get("object_name")),
             ("工点", baseline.get("site_id")), ("工序", PROCEDURES.get(procedure, procedure)),
             ("设计版本", baseline.get("version")),
         ]),
-        _section("核验项目", facts=[
-            ("核验方式", analysis_mode), ("规则初判", verdict),
-            ("定位结果", POSITIONS.get(capture.get("spatial_check_status") or compliance.get("spatial_check_status"))),
-        ], checks=checks, paragraphs=[] if checks else ["本记录未登记可逐项列出的规则比对。"]),
-        _section("人工复核", facts=[
-            ("复核结论", decision), ("复核人", reviewer), ("复核时间（北京时间）", _time(review.get("reviewed_at"))),
-        ], paragraphs=[_note(review.get("note"))]),
     ]
+    position = POSITIONS.get(capture.get("spatial_check_status") or compliance.get("spatial_check_status"))
+    if checks or position or verdict != "未形成规则判定":
+        sections.append(_section("核验记录", facts=[
+            ("核验方式", analysis_mode), ("规则初判", verdict), ("定位结果", position),
+        ], checks=checks))
     if attempt:
         case = _record(context.get("case"))
         sections.append(_section("整改复验", facts=[
             ("原问题", CASE_NAMES.get(case.get("finding_code"), "现场整改事项")),
-            ("复验轮次", attempt.get("attempt_no")), ("复验结论", resolution),
+            ("复验轮次", attempt.get("attempt_no")),
             ("登记时间（北京时间）", _time(attempt.get("submitted_at"))),
         ], paragraphs=[_value(attempt.get("action_description"))]))
     else:
@@ -185,14 +186,9 @@ def build_readable_report(content: dict[str, Any]) -> dict[str, Any]:
         ("关联采集记录", len(content.get("related_sensor_events") or [])),
     ]))
     return {
-        "version": 1,
+        "version": 2,
         "title": "施工整改复验报告" if attempt else "施工核验报告",
-        "summary": {
-            "resolved": "本轮整改已通过人工复验，复验资料已封存。",
-            "not_resolved": "本轮复验后继续整改，处理意见已随报告封存。",
-        }.get(attempt.get("resolution_decision"), f"规则初判为「{verdict}」，人工复核结论为「{decision}」。"),
-        "highlights": [{"label": "规则初判", "value": verdict}, {"label": "人工复核", "value": decision},
-                       {"label": "交付状态", "value": "已封存"}],
+        "summary": "",
         "sections": sections,
     }
 
@@ -216,6 +212,9 @@ def render_readable_html(view: dict[str, Any], report_id: str, created_at: Any) 
                  f"</thead><tbody>{checks}</tbody></table>") if checks else ""
         blocks.append(f"<section><h2>{text(section['heading'])}</h2><dl>{facts}</dl>{paragraphs}{table}</section>")
     title = text(view["title"])
+    # Replaying an already sealed v1 report must reproduce its original bytes.
+    brand = "烽眸智鉴" if view["version"] == 2 else "锋眸智鉴"
+    summary = f"<p>{text(view['summary'])}</p>" if view["version"] == 1 else ""
     return (
         "<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -228,8 +227,8 @@ def render_readable_html(view: dict[str, Any], report_id: str, created_at: Any) 
         "p{white-space:pre-line}table{border-collapse:collapse;width:100%;font-size:14px}"
         "td,th{padding:7px;text-align:left;border-bottom:1px solid #d5e0e9}th{background:#edf3f7}"
         "@media print{section{break-inside:avoid}body{margin:0;padding:0}}"
-        "</style></head><body><header><small>锋眸智鉴 · 工程交付记录</small>"
+        f"</style></head><body><header><small>{brand} · 工程交付记录</small>"
         f"<h1>{title}</h1><small>封存时间（北京时间） {text(_time(created_at))}</small>"
-        f"<p>{text(view['summary'])}</p></header>{''.join(blocks)}"
+        f"{summary}</header>{''.join(blocks)}"
         f"<footer><small>档案关联编号 {text(report_id)}</small></footer></body></html>"
     ).encode("utf-8")

@@ -24,30 +24,25 @@ function reportParts(report: Report) {
 
 function ReadablePaper({ view, sealedAt }: { view: Record<string, unknown>; sealedAt: string }) {
   const sections = Array.isArray(view.sections) ? view.sections.map(recordObject) : [];
-  const highlights = Array.isArray(view.highlights) ? view.highlights.map(recordObject) : [];
+  const review = sections.find((section) => section.heading === "人工复核");
+  const chapters = review ? [review, ...sections.filter((section) => section !== review)] : sections;
   return <article className="fm-paper fm-report-paper" aria-label="核验报告正文">
     <header>
       <p>{PRODUCT.name}　/　工程交付记录</p>
       <h2 className="mt-2">{recordText(view.title)}</h2>
       <small>封存于 {recordTime(sealedAt)}</small>
     </header>
-    <div className="fm-report-summary">
-      <p>{recordText(view.summary)}</p>
-      <dl>{highlights.map(({ label, value }) => <div key={recordText(label)}>
-        <dt>{recordText(label)}</dt><dd>{recordText(value)}</dd>
-      </div>)}</dl>
-    </div>
-    {sections.map((section) => {
-      const heading = recordText(section.heading);
+    {chapters.map((section) => {
+      const heading = section === review ? "复核意见" : recordText(section.heading);
       const facts = Array.isArray(section.facts) ? section.facts.map(recordObject) : [];
       const paragraphs = Array.isArray(section.paragraphs) ? section.paragraphs.map(recordText).filter(Boolean) : [];
       const checks = Array.isArray(section.checks) ? section.checks.map(recordObject) : [];
       return <section key={heading} className="fm-report-chapter">
         <h3>{heading}</h3>
+        {paragraphs.map((paragraph, index) => <p key={index} className="fm-report-paragraph">{paragraph}</p>)}
         {facts.length ? <RecordMeta entries={facts
           .filter(({ label, value }) => !(label === "资料类别" && value === "场景影像"))
           .map(({ label, value }) => [recordText(label), value === "规则参考" ? "规则辅助" : recordText(value)])} /> : null}
-        {paragraphs.map((paragraph, index) => <p key={index} className="fm-report-paragraph">{paragraph}</p>)}
         {checks.length ? <table className="fm-report-checks">
           <thead><tr>{["核验项", "设计要求", "观测记录", "判定"].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
           <tbody>{checks.map((check, index) => <tr key={index}>
@@ -63,7 +58,7 @@ function ReadablePaper({ view, sealedAt }: { view: Record<string, unknown>; seal
 function ReportPaper({ report, project }: { report: Report; project?: Project }) {
   const { content, project: storedProject, baseline, evidence, analysis, review, cases, sensors } = reportParts(report);
   const readable = recordObject(content.readable);
-  if (readable.version === 1) return <ReadablePaper view={readable} sealedAt={report.created_at} />;
+  if (readable.version === 1 || readable.version === 2) return <ReadablePaper view={readable} sealedAt={report.created_at} />;
   const title = projectDisplayName(recordText(storedProject.name) || project?.name || "工程项目");
   const reportState = REPORT_STATES[report.status]?.label || "报告已生成";
   const reviewDecision = { approve: "已批准", approved: "已批准", reject: "已驳回", rejected: "已驳回" }[recordText(review.decision)];
@@ -85,7 +80,7 @@ function ReportPaper({ report, project }: { report: Report; project?: Project })
     </header>
     <div className="fm-report-summary">
       <p>{remediation.resolution_decision === "resolved" ? "本轮复验通过。" : remediation.resolution_decision === "not_resolved"
-        ? "本轮复验后继续整改。" : `规则初判为「${verdict ? labelRuleVerdict(verdict) : "未形成规则判定"}」，人工复核结论为「${reviewDecision ?? "待确认"}」。`}</p>
+        ? "本轮复验后继续整改。" : verdict ? labelRuleVerdict(verdict) : "见人工复核记录。"}</p>
     </div>
     <section>
       <h3>工程信息</h3>
@@ -237,6 +232,9 @@ export function ReportsPage() {
             <button type="button" className="fm-button fm-button-primary" disabled={!selected || view !== "reader"} onClick={() => window.print()}>
               <Printer size={15} aria-hidden="true" />打印报告
             </button>
+            {selected && <Link className="fm-button" to={`/traceability?report=${encodeURIComponent(selected.id)}`}>
+              查看交付档案 <ArrowUpRight size={14} aria-hidden="true" />
+            </Link>}
           </div>
         </div>
         {selected && selectedTruth ? <div className="fm-report-surface">
