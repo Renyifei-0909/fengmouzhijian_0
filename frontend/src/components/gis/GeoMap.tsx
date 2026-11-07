@@ -27,13 +27,13 @@ const STREETS = "fm-streets";
 const ENGINEERING_LAYERS = [FILL, LINE, POINT, SELECTED_LINE, SELECTED_POINT];
 
 const QGIS_LAYERS = [
-  { id: "pipes", label: "管线", type: "line", color: "#76c2fb", size: 3.4 },
-  { id: "survey", label: "测量", type: "line", color: "#eca360", size: 2.5 },
-  { id: "house-connections", label: "入户线", type: "line", color: "#ea8886", size: 2.4 },
-  { id: "addresses", label: "地址", type: "circle", color: "#a69eed", size: 3.5 },
-  { id: "infrastructure", label: "设施", type: "circle", color: "#68c7a5", size: 5 },
-  { id: "pit-work", label: "施工点", type: "circle", color: "#e8b463", size: 5 },
-  { id: "photos", label: "照片点", type: "circle", color: "#d482ad", size: 4.5 },
+  { id: "pipes", label: "通信管道段", type: "line", color: "#76c2fb", size: 3.4 },
+  { id: "survey", label: "竣工测量线", type: "line", color: "#eca360", size: 2.5 },
+  { id: "house-connections", label: "用户引入管道段", type: "line", color: "#ea8886", size: 2.4 },
+  { id: "addresses", label: "建设地址点", type: "circle", color: "#a69eed", size: 3.5 },
+  { id: "infrastructure", label: "通信设施点", type: "circle", color: "#68c7a5", size: 5 },
+  { id: "pit-work", label: "管沟作业点", type: "circle", color: "#e8b463", size: 5 },
+  { id: "photos", label: "现场影像点", type: "circle", color: "#d482ad", size: 4.5 },
 ] as const;
 
 type ReferenceLayer = typeof QGIS_LAYERS[number];
