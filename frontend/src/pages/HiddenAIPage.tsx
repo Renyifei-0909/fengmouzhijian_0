@@ -146,7 +146,7 @@ export const HiddenAIPage: React.FC = () => {
           </div>
           <div className="grid grid-cols-3 gap-3 rounded-3xl border border-white/15 bg-slate-950/20 p-3 backdrop-blur-sm">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.24em] text-sky-200">赛题目标</p>
+              <p className="text-[11px] uppercase tracking-[0.24em] text-sky-200">验证指标</p>
               <p className="mt-1 text-sm font-semibold">未验证</p>
             </div>
             <div>

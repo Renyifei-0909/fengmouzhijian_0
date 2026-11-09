@@ -3,10 +3,16 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation, useNavigate } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiRequestError } from "../lib/api";
-import type { EngineeringObject, ProjectGisSummary, WorkOrder } from "../lib/api";
+import type { EngineeringObject, EvidenceCapture, ProjectGisSummary, WorkOrder } from "../lib/api";
+import type { CaptureMarker } from "../components/gis/GeoMap";
 import { GISMapPage } from "./GISMapPage";
 
-vi.mock("../components/gis/GeoMap", () => ({ GeoMap: () => <div /> }));
+vi.mock("../components/gis/GeoMap", () => ({
+  GeoMap: ({ captureMarker, objects }: { captureMarker: CaptureMarker | null; objects: EngineeringObject[] }) => (
+    <div aria-label="地图数据" data-capture-longitude={captureMarker?.longitude}
+      data-design-longitude={(objects[0]?.geometry_wgs84.coordinates as number[][] | undefined)?.[0]?.[0]} />
+  ),
+}));
 
 const timestamp = "2026-11-05T16:30:00Z";
 const first = makeObject("obj-a1", "project-a", "支线区段");
@@ -89,6 +95,7 @@ describe("工程作业项目与工单选择", () => {
       { id: "project-b", code: "B", name: "滨河二区", location: "", manager: null, status: "active", created_at: timestamp },
     ]);
     vi.spyOn(api, "listDesignPackages").mockResolvedValue([]);
+    vi.spyOn(api, "listWorkOrderCaptures").mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -124,6 +131,47 @@ describe("工程作业项目与工单选择", () => {
     await screen.findByRole("button", { name: /滨河区段/ });
     expect(screen.getByRole("combobox", { name: "当前项目" })).toHaveValue("project-b");
     expect(api.projectGisSummary).not.toHaveBeenCalledWith("project-a");
+  });
+
+  it("shows the order's frozen design and most recent located capture from a legacy map link", async () => {
+    const order = makeOrder(target);
+    order.geometry_snapshot.geometry_wgs84 = { type: "LineString", coordinates: [[118, 32], [121, 33]] };
+    vi.spyOn(api, "projectGisSummary").mockResolvedValue(makeSummary("project-a", [target], [order]));
+    const capture: EvidenceCapture = {
+      id: "capture-one", work_order_id: order.id, project_id: order.project_id, evidence_id: "evidence-a",
+      verification_job_id: null, client_captured_at: null, server_received_at: timestamp, created_at: timestamp,
+      latitude: 32, longitude: 118.001, accuracy_m: 3, location_source: "device_gps", is_synthetic_location: false,
+      distance_to_target_m: 4.2, tolerance_m: 50, gps_accuracy_threshold_m: 30, spatial_check_status: "passed",
+      spatial_check_reason: "",
+    };
+    vi.mocked(api.listWorkOrderCaptures).mockResolvedValue([
+      capture, { ...capture, id: "without-position", server_received_at: "2026-11-05T16:31:00Z", latitude: null, longitude: null },
+    ]);
+    open("?project=project-a&object=obj-a2&workOrder=order-a&view=qgis");
+
+    await screen.findByText("4.2 米");
+    expect(screen.getByLabelText("地图数据")).toHaveAttribute("data-capture-longitude", "118.001");
+    expect(screen.getByLabelText("地图数据")).toHaveAttribute("data-design-longitude", "118");
+    expect(screen.getByRole("link", { name: "工单详情" })).toHaveAttribute("href", "/work-orders/order-a");
+    expect(screen.getByLabelText("当前路径")).toHaveTextContent("object=obj-a2");
+    await waitFor(() => expect(screen.getByLabelText("当前路径")).not.toHaveTextContent("view="));
+  });
+
+  it("keeps planned network features out of the work point list and work-order creation", async () => {
+    vi.mocked(api.listProjects).mockResolvedValue([
+      { id: "project-a", code: "FM-PY-2608", name: "浦沿片区", location: "", manager: null, status: "active", created_at: timestamp },
+    ]);
+    vi.spyOn(api, "projectGisSummary").mockResolvedValue(makeSummary("project-a", [target]));
+    open("?project=project-a");
+    const rail = within(screen.getByRole("complementary", { name: "工程对象" }));
+    await rail.findByRole("button", { name: /目标区段/ });
+    expect(rail.queryByRole("button", { name: /浦沿路.*主干管道/ })).toBeNull();
+
+    await userEvent.click(rail.getByRole("button", { name: "管网布设" }));
+    const [layout] = await rail.findAllByRole("button", { name: /浦沿路.*主干管道/ });
+    await userEvent.click(layout);
+    expect(screen.getByRole("heading", { name: "浦沿路 · 主干管道" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "新建工单" })).toBeNull();
   });
 
   it("ignores late data from the previous project and restores it on Back", async () => {

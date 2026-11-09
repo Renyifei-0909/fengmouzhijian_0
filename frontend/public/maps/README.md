@@ -9,3 +9,5 @@
 近景建筑轮廓和少量道路标签来自 [OpenFreeMap](https://openfreemap.org/) 的 [OpenMapTiles](https://www.openmaptiles.org/) 数据，使用 2026-11-01 快照在滨江沿江区域的四张 14 级瓦片。提取后与底图一同离线加载，建筑细节在高缩放级别显示。
 
 地图首次显示署名，随后折叠到右下角的来源入口。[交互地图署名指引](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines)
+
+滨江、浦沿和西兴的管网布设图层也基于同一份 OpenStreetMap 道路提取。主干、支线与接入段沿选定道路生成。分歧井关联平面交会线路，其他节点按布设间距生成。重建入口为 `examples/desktop-workbench/build_network_layout.py`。

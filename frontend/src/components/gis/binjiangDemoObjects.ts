@@ -1,6 +1,62 @@
 import type { EngineeringObject, GeoJsonGeometry } from "../../lib/api";
+import networkLayouts from "./binjiangNetwork.json";
 
 export const BINJIANG_DEMO_PACKAGE_ID = "internal-binjiang-demo";
+
+const LAYOUT_TYPES = {
+  trunk: { name: "主干管道", type: "telecom_duct" },
+  branch: { name: "支线管道", type: "telecom_duct" },
+  access: { name: "街区接入段", type: "telecom_duct" },
+  junction: { name: "分歧井", type: "telecom_manhole" },
+  manhole: { name: "通信人孔", type: "telecom_manhole" },
+  handhole: { name: "通信手孔", type: "telecom_handhole" },
+  cabinet: { name: "光缆交接箱", type: "fiber_cross_connect_cabinet" },
+  terminal: { name: "接入末端", type: "fiber_distribution_box" },
+} as const;
+
+type LayoutRow = {
+  key: string;
+  road: string;
+  kind: keyof typeof LAYOUT_TYPES;
+  coordinates: number[] | number[][];
+  lengthM?: number;
+  ties: string[];
+};
+
+const layouts = networkLayouts as Record<string, LayoutRow[] | undefined>;
+
+export function createNetworkLayoutObjects(projectId: string, projectCode: string): EngineeringObject[] {
+  const district = projectCode.split("-")[1];
+  return (layouts[projectCode] ?? []).map(({ key, road, kind, coordinates, lengthM, ties }) => {
+    const isLine = lengthM !== undefined;
+    const geometryType = isLine ? "LineString" : "Point";
+    const { name, type } = LAYOUT_TYPES[kind];
+    const code = `${district}-${isLine ? "L" : "N"}${key}`;
+    return {
+      id: `layout-${projectCode}-${key}`,
+      project_id: projectId,
+      design_package_id: BINJIANG_DEMO_PACKAGE_ID,
+      object_code: code,
+      object_type: type,
+      name: `${road} · ${name}`,
+      source_layer: "管网布设",
+      source_feature_id: code,
+      geometry_type: geometryType,
+      geometry_wgs84: { type: geometryType, coordinates },
+      geometry_source_crs_epsg: 4326,
+      attributes_snapshot: {
+        道路: road,
+        布设类型: name,
+        layout_kind: kind,
+        length_m: lengthM,
+        linked_routes: ties.map((route) => `layout-${projectCode}-${route}`),
+      },
+      expected_rules: {},
+      design_version: "布设方案",
+      created_at: "",
+    };
+  });
+}
 
 type DemoObject = {
   code: string;

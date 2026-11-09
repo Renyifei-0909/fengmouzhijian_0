@@ -8,7 +8,7 @@ export const BINJIANG_CENTER: [number, number] = [120.191, 30.207];
 export function isBinjiangViewport(map: LibreMap) {
   const { lng, lat } = map.getCenter();
   const [west, south, east, north] = BINJIANG_BOUNDS;
-  return map.getZoom() >= 11.8 && lng >= west && lng <= east && lat >= south && lat <= north;
+  return map.getZoom() >= 10.8 && lng >= west && lng <= east && lat >= south && lat <= north;
 }
 
 const LAYERS: maplibregl.LayerSpecification[] = [
@@ -25,7 +25,7 @@ const LAYERS: maplibregl.LayerSpecification[] = [
   { id: "fm-context-local-roads", type: "line", source: SOURCE, minzoom: 12,
     filter: ["all", ["==", ["get", "kind"], "road"], ["==", ["get", "rank"], "local"]],
     layout: { "line-join": "round", "line-cap": "round" },
-    paint: { "line-color": "#405967", "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.45, 15, 1.05, 18, 2.35] } },
+    paint: { "line-color": "#405967", "line-opacity": .8, "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.45, 15, 1.05, 18, 2.35] } },
   { id: "fm-context-road-casing", type: "line", source: SOURCE, minzoom: 13,
     filter: ["all", ["==", ["get", "kind"], "road"], ["!=", ["get", "rank"], "local"]],
     layout: { "line-join": "round", "line-cap": "round" },
@@ -34,6 +34,7 @@ const LAYERS: maplibregl.LayerSpecification[] = [
     layout: { "line-join": "round", "line-cap": "round" },
     paint: {
       "line-color": ["match", ["get", "rank"], "express", "#b3a27d", "main", "#829aa6", "#607887"],
+      "line-opacity": .77,
       "line-width": ["interpolate", ["linear"], ["zoom"], 11, 0.7, 14, 2, 18, 5],
     } },
   { id: "fm-context-bridges", type: "line", source: SOURCE, minzoom: 14,

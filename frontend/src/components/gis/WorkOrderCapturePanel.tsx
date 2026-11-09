@@ -34,6 +34,7 @@ const ANALYZERS: Record<AnalyzerName, string> = {
 
 type Props = {
   workOrder: WorkOrder;
+  initialCaptureId?: string;
   onWorkOrderUpdated?: (workOrder: WorkOrder) => void;
   onCaptureMarkerChange?: (marker: CaptureMarker | null) => void;
 };
@@ -60,9 +61,9 @@ async function loadCaptureResult(jobId: string): Promise<CaptureResult> {
   return { detail, compliance: compliance?.job_id === jobId ? compliance : null };
 }
 
-export function WorkOrderCapturePanel({ workOrder, onWorkOrderUpdated, onCaptureMarkerChange }: Props) {
+export function WorkOrderCapturePanel({ workOrder, initialCaptureId, onWorkOrderUpdated, onCaptureMarkerChange }: Props) {
   const [captures, setCaptures] = useState<EvidenceCapture[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialCaptureId ?? null);
   const [results, setResults] = useState<Record<string, CaptureResult>>({});
   const [historyBadges, setHistoryBadges] = useState<Record<string, { status: string; verdict?: string }>>({});
   const [historyLoading, setHistoryLoading] = useState(true);
